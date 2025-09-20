@@ -1,6 +1,21 @@
 import { apiRequest } from './api';
 import type { User, LoginCredentials, RegisterData } from '@/types/auth';
 
+interface PasswordResetResponse {
+  success: boolean;
+  message: string;
+}
+
+interface TokenValidationResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    valid: boolean;
+    expired?: boolean;
+    used?: boolean;
+  };
+}
+
 export const authService = {
   async login(credentials: LoginCredentials) {
     const response = await apiRequest<{ user: User; token: string }>('POST', '/auth/login', credentials);
@@ -44,5 +59,88 @@ export const authService = {
 
   isAuthenticated(): boolean {
     return !!this.getStoredToken();
+  },
+    async requestPasswordReset(email: string): Promise<PasswordResetResponse> {
+    try {
+      const response = await apiRequest<PasswordResetResponse>('POST', '/auth/forgot-password', {
+        email: email.toLowerCase(),
+      });
+      
+      return {
+        success: response.success,
+        message: response.message || 'If an account with that email exists, a password reset link has been sent.',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'An error occurred while requesting password reset.',
+      };
+    }
+  },
+
+  async validateResetToken(token: string): Promise<{ 
+    valid: boolean; 
+    expired?: boolean; 
+    used?: boolean; 
+  }> {
+    try {
+      const response = await apiRequest<TokenValidationResponse>(
+        'GET', 
+        `/auth/validate-reset-token/${encodeURIComponent(token)}`
+      );
+      
+      if (response.success && response.data) {
+        return response.data;
+      } else {
+        return { valid: false };
+      }
+    } catch (error: any) {
+      // Handle specific error cases from the response
+      if (error.data?.expired) {
+        return { valid: false, expired: true };
+      } else if (error.data?.used) {
+        return { valid: false, used: true };
+      }
+      return { valid: false };
+    }
+  },
+
+  async resetPassword(token: string, newPassword: string): Promise<PasswordResetResponse> {
+    try {
+      const response = await apiRequest<PasswordResetResponse>('POST', '/auth/reset-password', {
+        token,
+        newPassword,
+      });
+      
+      return {
+        success: response.success,
+        message: response.message || 'Password has been reset successfully.',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'An error occurred while resetting password.',
+      };
+    }
+  },
+
+  // Admin/utility method
+  async cleanupExpiredTokens(): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiRequest<{ success: boolean; message: string; data?: { deletedCount: number } }>(
+        'POST', 
+        '/auth/cleanup-tokens'
+      );
+      
+      return {
+        success: response.success,
+        message: response.message || 'Token cleanup completed.',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to cleanup expired tokens.',
+      };
+    }
   },
 };

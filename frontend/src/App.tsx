@@ -5,6 +5,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AuthContext, useAuthState } from '@/hooks/useAuth';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { RegisterForm } from '@/components/auth/RegisterForm';
+import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
+import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { ExpenseList } from '@/components/expenses/ExpenseList';
@@ -129,25 +131,6 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-const ForgotPasswordPage: React.FC = () => (
-  <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-    <div className="sm:mx-auto sm:w-full sm:max-w-md">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">💰 FinTech</h1>
-        <h2 className="text-2xl font-bold text-gray-900">Reset your password</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Password reset functionality coming soon
-        </p>
-      </div>
-      <div className="mt-8 text-center">
-        <a href="/login" className="text-blue-600 hover:text-blue-500">
-          ← Back to login
-        </a>
-      </div>
-    </div>
-  </div>
-);
-
 const AppContent: React.FC = () => {
   const authState = useAuthState();
 
@@ -175,7 +158,15 @@ const AppContent: React.FC = () => {
             path="/forgot-password" 
             element={
               <PublicRoute>
-                <ForgotPasswordPage />
+                <ForgotPasswordForm />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/reset-password" 
+            element={
+              <PublicRoute>
+                <ResetPasswordForm />
               </PublicRoute>
             } 
           />
@@ -220,6 +211,18 @@ const AppContent: React.FC = () => {
             } 
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* 404 Route */}
+          <Route path="*" element={
+            <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+              <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+                <p className="text-gray-600 mb-6">Page not found</p>
+                <a href="/dashboard" className="text-blue-600 hover:text-blue-500">
+                  Return to Dashboard
+                </a>
+              </div>
+            </div>
+          } />
         </Routes>
       </Router>
     </AuthContext.Provider>

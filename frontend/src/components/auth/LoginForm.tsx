@@ -45,7 +45,7 @@ export const LoginForm: React.FC = () => {
 
     try {
       await login(data.email, data.password);
-      // Login successful, navigate to dashboard or intended page
+      // Login successful, navigate to dashboard
       navigate(from, { replace: true });
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -105,9 +105,12 @@ export const LoginForm: React.FC = () => {
 
             <div className="flex items-center justify-between">
               <div className="text-sm">
-                <a href="/forgot-password" className="font-medium text-blue-600 hover:text-blue-500">
+                <Link 
+                  to="/forgot-password" 
+                  className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+                >
                   Forgot your password?
-                </a>
+                </Link>
               </div>
             </div>
 
