@@ -1,23 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { 
-  Save, 
   X, 
   DollarSign, 
   Calendar, 
-  Tag, 
+  MapPin, 
   CreditCard,
-  Sparkles,
-  Building,
+  Tag,
   FileText,
-  Hash
+  Bot,
+  Upload,
+  Repeat,
+  File,
+  Trash2,
+  Eye,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
-import { useCategories, useCreateExpense, useUpdateExpense, useCategorizeExpense } from '@/hooks/useExpenses';
+import { useCategories, useCreateExpense, useUpdateExpense } from '@/hooks/useExpenses';
+import { uploadService, type UploadedReceipt } from '@/services/uploadService';
 import type { Expense, CreateExpenseData } from '@/types/expense';
 
 const expenseSchema = z.object({
@@ -37,33 +42,37 @@ type ExpenseFormData = z.infer<typeof expenseSchema>;
 interface ExpenseFormProps {
   expense?: Expense;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess: () => void;
 }
 
 const paymentMethods = [
-  { value: 'CREDIT_CARD', label: 'Credit Card', icon: 'í²³' },
-  { value: 'DEBIT_CARD', label: 'Debit Card', icon: 'í²³' },
-  { value: 'CASH', label: 'Cash', icon: 'í²µ' },
-  { value: 'BANK_TRANSFER', label: 'Bank Transfer', icon: 'í¿¦' },
-  { value: 'DIGITAL_WALLET', label: 'Digital Wallet', icon: 'í³±' },
+  { value: 'CREDIT_CARD', label: 'Credit Card' },
+  { value: 'DEBIT_CARD', label: 'Debit Card' },
+  { value: 'CASH', label: 'Cash' },
+  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+  { value: 'DIGITAL_WALLET', label: 'Digital Wallet' },
 ];
 
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSuccess }) => {
-  const [newTag, setNewTag] = useState('');
-  const [error, setError] = useState('');
-  
+  const [tagInput, setTagInput] = useState('');
+  const [useAiCategorization, setUseAiCategorization] = useState(!expense);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadedReceipt, setUploadedReceipt] = useState<UploadedReceipt | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { data: categoriesData } = useCategories();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
-  const categorizeExpense = useCategorizeExpense();
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
-    setValue,
     watch,
-    reset,
+    setValue,
+    formState: { errors },
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
     defaultValues: expense ? {
@@ -74,7 +83,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
       paymentMethod: expense.paymentMethod,
       categoryId: expense.category.id,
       isRecurring: expense.isRecurring,
-      tags: expense.tags,
+      tags: expense.tags || [],
       notes: expense.notes || '',
     } : {
       amount: 0,
@@ -89,59 +98,125 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
     },
   });
 
-  const watchedFields = watch(['description', 'merchant', 'tags']);
+  const watchedTags = watch('tags');
 
-  const handleAICategory = async () => {
-    const description = watchedFields[0];
-    const merchant = watchedFields[1];
+  // File upload handlers
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      validateAndUploadFile(file);
+    }
+  };
 
-    if (!description) return;
+  const handleFileDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      validateAndUploadFile(file);
+    }
+  };
 
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
+  const validateAndUploadFile = async (file: File) => {
+    setUploadError(null);
+    setIsUploading(true);
+    
     try {
-      // Mock AI categorization for now
-      const categories = categoriesData?.data?.categories || [];
-      if (categories.length > 0) {
-        const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-        setValue('categoryId', randomCategory.id);
+      // Use upload service for validation and upload
+      const result = await uploadService.uploadReceipt(file);
+      
+      if (result.success) {
+        setUploadedReceipt(result.data);
+      } else {
+        throw new Error(result.message || 'Upload failed');
       }
-    } catch (err) {
-      console.error('AI categorization failed:', err);
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setUploadError(error.message || 'Failed to upload file');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeReceipt = async () => {
+    if (uploadedReceipt) {
+      try {
+        // Use upload service for deletion
+        const result = await uploadService.deleteReceipt(uploadedReceipt.publicId);
+
+        if (result.success) {
+          setUploadedReceipt(null);
+          setUploadError(null);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        }
+      } catch (error) {
+        console.error('Error deleting receipt:', error);
+        // Still remove from UI even if deletion fails
+        setUploadedReceipt(null);
+      }
+    }
+  };
+
+  const onSubmit = async (data: ExpenseFormData) => {
+    setIsSubmitting(true);
+    
+    try {
+      const expenseData: CreateExpenseData = {
+        amount: data.amount,
+        description: data.description,
+        transactionDate: data.transactionDate,
+        merchant: data.merchant || undefined,
+        paymentMethod: data.paymentMethod,
+        categoryId: (useAiCategorization || !data.categoryId) ? undefined : data.categoryId,
+        isRecurring: data.isRecurring,
+        tags: data.tags,
+        notes: data.notes || undefined,
+        receiptUrl: uploadedReceipt?.url,
+      };
+
+      if (expense) {
+        await updateExpense.mutateAsync({
+          id: expense.id,
+          data: expenseData,
+        });
+      } else {
+        await createExpense.mutateAsync(expenseData);
+      }
+
+      onSuccess();
+    } catch (error: any) {
+      console.error('Failed to save expense:', error);
+      setUploadError('Failed to save expense. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const addTag = () => {
-    if (newTag.trim() && !watchedFields[2].includes(newTag.trim())) {
-      setValue('tags', [...watchedFields[2], newTag.trim()]);
-      setNewTag('');
+    if (tagInput.trim() && !watchedTags.includes(tagInput.trim())) {
+      setValue('tags', [...watchedTags, tagInput.trim()]);
+      setTagInput('');
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setValue('tags', watchedFields[2].filter(tag => tag !== tagToRemove));
+    setValue('tags', watchedTags.filter(tag => tag !== tagToRemove));
   };
 
-  const onSubmit = async (data: ExpenseFormData) => {
-    setError('');
-
-    try {
-      if (expense) {
-        await updateExpense.mutateAsync({ id: expense.id, data });
-      } else {
-        await createExpense.mutateAsync(data);
-      }
-      
-      onSuccess?.();
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save expense');
+  const handleTagInputKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTag();
     }
   };
 
-  const isLoading = createExpense.isPending || updateExpense.isPending;
-  const isAILoading = categorizeExpense.isPending;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/70 bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
@@ -156,90 +231,88 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <p className="text-sm text-red-600">{error}</p>
+          {/* Amount and Description */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Input
+                {...register('amount', { valueAsNumber: true })}
+                type="number"
+                step="0.01"
+                label="Amount"
+                error={errors.amount?.message}
+                placeholder="0.00"
+              />
             </div>
-          )}
-
-          {/* Amount and Date Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Input
-              {...register('amount', { valueAsNumber: true })}
-              type="number"
-              step="0.01"
-              label="Amount *"
-              icon={<DollarSign />}
-              error={errors.amount?.message}
-              placeholder="0.00"
-            />
-
-            <Input
-              {...register('transactionDate')}
-              type="date"
-              label="Transaction Date *"
-              icon={<Calendar />}
-              error={errors.transactionDate?.message}
-            />
+            <div>
+              <Input
+                {...register('description')}
+                label="Description"
+                error={errors.description?.message}
+                placeholder="Coffee and pastry"
+              />
+            </div>
           </div>
 
-          {/* Description */}
-          <Input
-            {...register('description')}
-            label="Description *"
-            icon={<FileText />}
-            error={errors.description?.message}
-            placeholder="What did you spend on?"
-          />
-
-          {/* Merchant and Payment Method */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Input
-              {...register('merchant')}
-              label="Merchant"
-              icon={<Building />}
-              placeholder="Store or service name"
-            />
-
+          {/* Date and Merchant */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="form-label">Payment Method *</label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <select
-                  {...register('paymentMethod')}
-                  className="form-input pl-10"
-                >
-                  {paymentMethods.map((method) => (
-                    <option key={method.value} value={method.value}>
-                      {method.icon} {method.label}
-                    </option>
-                  ))}
-                </select>
+              <Input
+                {...register('transactionDate')}
+                type="date"
+                label="Transaction Date"
+                error={errors.transactionDate?.message}
+              />
+            </div>
+            <div>
+              <Input
+                {...register('merchant')}
+                label="Merchant (Optional)"
+                error={errors.merchant?.message}
+                placeholder="Starbucks"
+              />
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <label className="form-label">Payment Method</label>
+            <select
+              {...register('paymentMethod')}
+              className="form-input"
+            >
+              {paymentMethods.map((method) => (
+                <option key={method.value} value={method.value}>
+                  {method.label}
+                </option>
+              ))}
+            </select>
+            {errors.paymentMethod && (
+              <p className="mt-1 text-sm text-red-600">{errors.paymentMethod.message}</p>
+            )}
+          </div>
+
+          {/* Category Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="form-label">Category</label>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={useAiCategorization}
+                  onChange={(e) => setUseAiCategorization(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700 flex items-center">
+                  <Bot className="h-4 w-4 mr-1" />
+                  Use AI categorization
+                </label>
               </div>
             </div>
-          </div>
-
-          {/* Category with AI suggestion */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label">Category</label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleAICategory}
-                loading={isAILoading}
-                disabled={!watchedFields[0]}
-              >
-                <Sparkles className="h-3 w-3 mr-1" />
-                AI Suggest
-              </Button>
-            </div>
-            <div className="relative">
-              <Tag className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            
+            {!useAiCategorization && (
               <select
                 {...register('categoryId')}
-                className="form-input pl-10"
+                className="form-input"
               >
                 <option value="">Select a category</option>
                 {categoriesData?.data?.categories.map((category) => (
@@ -248,19 +321,29 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
                   </option>
                 ))}
               </select>
-            </div>
+            )}
+            
+            {useAiCategorization && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center text-blue-700">
+                  <Bot className="h-5 w-5 mr-2" />
+                  <span className="text-sm">
+                    AI will automatically categorize this expense based on the description and merchant.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tags */}
           <div>
-            <label className="form-label">Tags</label>
+            <label className="form-label">Tags (Optional)</label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {watchedFields[2].map((tag) => (
+              {watchedTags.map((tag, index) => (
                 <span
-                  key={tag}
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
                 >
-                  <Hash className="h-3 w-3 mr-1" />
                   {tag}
                   <button
                     type="button"
@@ -272,51 +355,174 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex">
               <input
                 type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                className="form-input flex-1"
-                placeholder="Add tag..."
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={handleTagInputKeyPress}
+                placeholder="Add a tag..."
+                className="form-input rounded-r-none"
               />
               <Button
                 type="button"
-                variant="secondary"
                 onClick={addTag}
-                disabled={!newTag.trim()}
+                variant="secondary"
+                className="rounded-l-none border-l-0"
               >
-                Add
+                <Tag className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          {/* Recurring checkbox */}
+          {/* Recurring Expense */}
           <div className="flex items-center">
             <input
               type="checkbox"
               {...register('isRecurring')}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
-            <label className="ml-2 text-sm text-gray-700">
+            <label className="ml-2 text-sm font-medium text-gray-700 flex items-center">
+              <Repeat className="h-4 w-4 mr-1" />
               This is a recurring expense
             </label>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="form-label">Notes</label>
+            <label className="form-label">Notes (Optional)</label>
             <textarea
               {...register('notes')}
               rows={3}
               className="form-input"
-              placeholder="Additional notes (optional)"
+              placeholder="Additional notes about this expense..."
             />
+            {errors.notes && (
+              <p className="mt-1 text-sm text-red-600">{errors.notes.message}</p>
+            )}
           </div>
 
-          {/* Form Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+          {/* Receipt Upload using Upload Service */}
+          <div>
+            <label className="form-label">Receipt (Optional)</label>
+            
+            {!uploadedReceipt ? (
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                  isUploading 
+                    ? 'border-blue-400 bg-blue-50' 
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onDrop={handleFileDrop}
+                onDragOver={handleDragOver}
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+              >
+                {isUploading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span className="ml-3 text-blue-600">Uploading to Cloudinary...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600">
+                      Drag and drop a receipt image, or{' '}
+                      <span className="text-blue-600 hover:text-blue-700 font-medium">
+                        browse
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      PNG, JPG, WebP, PDF up to 10MB â€¢ Automatically optimized
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-3">
+                    {/* Thumbnail for images */}
+                    {uploadService.isImageFile(uploadedReceipt.format) && uploadedReceipt.thumbnailUrl ? (
+                      <img
+                        src={uploadedReceipt.thumbnailUrl}
+                        alt="Receipt thumbnail"
+                        className="w-16 h-16 object-cover rounded-lg border"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-red-100 rounded-lg flex items-center justify-center">
+                        <File className="h-8 w-8 text-red-500" />
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {uploadedReceipt.originalName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {uploadService.formatFileSize(uploadedReceipt.size)} â€¢ {uploadedReceipt.format?.toUpperCase()}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        âœ“ Uploaded to Cloudinary
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {/* Preview button for images */}
+                    {uploadService.isImageFile(uploadedReceipt.format) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPreview(true)}
+                        className="text-blue-600 hover:text-blue-700"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
+                    
+                    {/* Download/View button */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.open(uploadedReceipt.url, '_blank')}
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    
+                    {/* Remove button */}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeReceipt}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+              disabled={isUploading}
+            />
+
+            {uploadError && (
+              <p className="mt-2 text-sm text-red-600">{uploadError}</p>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex space-x-3 pt-4 border-t border-gray-200">
             <Button
               type="button"
               variant="secondary"
@@ -327,14 +533,33 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
             </Button>
             <Button
               type="submit"
-              loading={isLoading}
+              loading={isSubmitting}
+              disabled={isUploading}
               className="flex-1"
             >
-              <Save className="h-4 w-4 mr-2" />
-              {expense ? 'Update' : 'Save'} Expense
+              {expense ? 'Update Expense' : 'Add Expense'}
             </Button>
           </div>
         </form>
+
+        {/* Image Preview Modal */}
+        {showPreview && uploadedReceipt && uploadService.isImageFile(uploadedReceipt.format) && (
+          <div className="fixed inset-0 bg-black/70 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="relative max-w-4xl max-h-full">
+              <button
+                onClick={() => setShowPreview(false)}
+                className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+              >
+                <X className="h-8 w-8" />
+              </button>
+              <img
+                src={uploadedReceipt.previewUrl || uploadedReceipt.url}
+                alt="Receipt preview"
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -22,13 +22,6 @@ interface ReportListProps {
   onGenerateNew: () => void;
 }
 
-const formatFileSize = (bytes?: number) => {
-  if (!bytes) return 'Unknown size';
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-};
-
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -64,6 +57,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
     page: 1,
     limit: 10,
   });
+  const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   const { data: reportsData, isLoading, error } = useReports(filters);
   const deleteReport = useDeleteReport();
@@ -82,9 +76,12 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
 
   const handleDownload = async (id: string, format: 'pdf' | 'csv' | 'excel' = 'pdf') => {
     try {
+      setDownloadingReportId(id);
       await downloadReport.mutateAsync({ id, format });
     } catch (error) {
       console.error('Failed to download report:', error);
+    } finally {
+      setDownloadingReportId(null);
     }
   };
 
@@ -135,7 +132,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center">
-              <Filter className="h-4 w-4 text-gray-400 mr-2" />
+              <Filter className="h-6 w-6 text-blue-400 mr-2" />
               <select
                 value={filters.type || ''}
                 onChange={(e) => setFilters({ ...filters, type: e.target.value as any || undefined })}
@@ -148,18 +145,6 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                 <option value="custom">Custom</option>
               </select>
             </div>
-            
-            <select
-              value={filters.status || ''}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value as any || undefined })}
-              className="border border-gray-300 rounded-md px-3 py-1 text-sm"
-            >
-              <option value="">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="generating">Generating</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-            </select>
           </div>
 
           <div className="text-sm text-gray-500">
@@ -213,8 +198,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                       
                       <div className="flex items-center space-x-4 text-sm text-gray-500">
                         <span>Generated: {formatDate(report.generatedAt)}</span>
-                        {report.fileSize && <span>Size: {formatFileSize(report.fileSize)}</span>}
-                        {report.downloadCount && <span>Downloads: {report.downloadCount}</span>}
+                        <span>Downloads: {report.downloadCount || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -225,25 +209,33 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                   {report.status === 'completed' && (
                     <>
                       <div className="relative group">
-                        <Button variant="secondary" size="sm">
+                        <Button 
+                          variant="secondary" 
+                          size="sm"
+                          loading={downloadingReportId === report.id}
+                          disabled={downloadingReportId === report.id}
+                        >
                           <Download className="h-4 w-4" />
                         </Button>
                         <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
                           <button
                             onClick={() => handleDownload(report.id, 'pdf')}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 first:rounded-t-lg"
+                            disabled={downloadingReportId === report.id}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 first:rounded-t-lg disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             PDF
                           </button>
                           <button
                             onClick={() => handleDownload(report.id, 'csv')}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50"
+                            disabled={downloadingReportId === report.id}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             CSV
                           </button>
                           <button
                             onClick={() => handleDownload(report.id, 'excel')}
-                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 last:rounded-b-lg"
+                            disabled={downloadingReportId === report.id}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-gray-50 last:rounded-b-lg disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Excel
                           </button>
@@ -270,7 +262,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4" />
-                                      </Button>
+                  </Button>
                 </div>
               </div>
             </Card>

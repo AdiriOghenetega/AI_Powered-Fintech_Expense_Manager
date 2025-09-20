@@ -7,7 +7,10 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Dashboard } from '@/components/dashboard/Dashboard';
+import { ExpenseList } from '@/components/expenses/ExpenseList';
 import { ReportsPage } from '@/pages/Reports';
+import { BudgetsPage } from '@/pages/Budgets';
+import { AnalyticsPage } from '@/pages/Analytics';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,10 +35,9 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const handleLogout = () => {
-    logout()
-    // redirect to login
+    logout();
     window.location.href = '/login';
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -52,6 +54,9 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 </a>
                 <a href="/expenses" className={getNavItemClass('/expenses')}>
                   Expenses
+                </a>
+                <a href="/budgets" className={getNavItemClass('/budgets')}>
+                  Budgets
                 </a>
                 <a href="/analytics" className={getNavItemClass('/analytics')}>
                   Analytics
@@ -124,25 +129,6 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-// Placeholder pages
-const ExpensesPage: React.FC = () => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div className="text-center py-12">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">Expenses</h1>
-      <p className="text-gray-600">Expense management system from previous implementation</p>
-    </div>
-  </div>
-);
-
-const AnalyticsPage: React.FC = () => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div className="text-center py-12">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">Analytics</h1>
-      <p className="text-gray-600">Analytics dashboard from previous implementation</p>
-    </div>
-  </div>
-);
-
 const ForgotPasswordPage: React.FC = () => (
   <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
     <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -183,7 +169,7 @@ const AppContent: React.FC = () => {
               <PublicRoute>
                 <RegisterForm />
               </PublicRoute>
-                          } 
+            } 
           />
           <Route 
             path="/forgot-password" 
@@ -205,7 +191,15 @@ const AppContent: React.FC = () => {
             path="/expenses" 
             element={
               <ProtectedRoute>
-                <ExpensesPage />
+                <ExpenseList />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/budgets" 
+            element={
+              <ProtectedRoute>
+                <BudgetsPage />
               </ProtectedRoute>
             } 
           />

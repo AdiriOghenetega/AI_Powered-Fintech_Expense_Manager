@@ -1,13 +1,13 @@
-import React from 'react';
-import { Search, Calendar, Filter, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Calendar, Filter, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useCategories } from '@/hooks/useExpenses';
-import type { ExpenseFilters } from '@/services/expenseService';
+import type { ExpenseFilters as ExpenseFilterTypes } from '@/services/expenseService';
 
 interface ExpenseFiltersProps {
-  filters: ExpenseFilters;
-  onFiltersChange: (filters: ExpenseFilters) => void;
+  filters: ExpenseFilterTypes;
+  onFiltersChange: (filters: ExpenseFilterTypes) => void;
   onClearFilters: () => void;
 }
 
@@ -25,14 +25,42 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
   onClearFilters,
 }) => {
   const { data: categoriesData } = useCategories();
+  
+  // Local state for form inputs
+  const [localFilters, setLocalFilters] = useState<ExpenseFilterTypes>(filters);
 
-  const updateFilter = (key: keyof ExpenseFilters, value: any) => {
-    onFiltersChange({
-      ...filters,
+  // Sync local state when filters prop changes (e.g., when clearing filters)
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const updateLocalFilter = (key: keyof ExpenseFilterTypes, value: any) => {
+    setLocalFilters(prev => ({
+      ...prev,
       [key]: value === '' ? undefined : value,
-      page: 1, // Reset to first page when filtering
+    }));
+  };
+
+  const applyFilters = () => {
+    onFiltersChange({
+      ...localFilters,
+      page: 1, // Reset to first page when applying filters
     });
   };
+
+  const resetFilters = () => {
+    const defaultFilters: ExpenseFilterTypes = {
+      page: 1,
+      limit: 20,
+      sortBy: 'date',
+      sortOrder: 'desc',
+    };
+    setLocalFilters(defaultFilters);
+    onFiltersChange(defaultFilters);
+  };
+
+  // Check if local filters differ from applied filters
+  const hasUnappliedChanges = JSON.stringify(localFilters) !== JSON.stringify(filters);
 
   const hasActiveFilters = Object.values(filters).some(
     (value, index) => {
@@ -50,17 +78,19 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
           <Filter className="h-5 w-5 text-gray-400 mr-2" />
           <h3 className="text-lg font-medium text-gray-900">Filters</h3>
         </div>
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClearFilters}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Clear All
-          </Button>
-        )}
+        <div className="flex items-center space-x-2">
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Clear All
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -68,8 +98,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
         <div className="lg:col-span-2">
           <Input
             placeholder="Search descriptions, merchants..."
-            value={filters.search || ''}
-            onChange={(e) => updateFilter('search', e.target.value)}
+            value={localFilters.search || ''}
+            onChange={(e) => updateLocalFilter('search', e.target.value)}
             icon={<Search />}
           />
         </div>
@@ -79,8 +109,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
           <Input
             type="date"
             label="Start Date"
-            value={filters.startDate || ''}
-            onChange={(e) => updateFilter('startDate', e.target.value)}
+            value={localFilters.startDate || ''}
+            onChange={(e) => updateLocalFilter('startDate', e.target.value)}
             icon={<Calendar />}
           />
         </div>
@@ -89,8 +119,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
           <Input
             type="date"
             label="End Date"
-            value={filters.endDate || ''}
-            onChange={(e) => updateFilter('endDate', e.target.value)}
+            value={localFilters.endDate || ''}
+            onChange={(e) => updateLocalFilter('endDate', e.target.value)}
             icon={<Calendar />}
           />
         </div>
@@ -99,8 +129,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
         <div>
           <label className="form-label">Category</label>
           <select
-            value={filters.category || ''}
-            onChange={(e) => updateFilter('category', e.target.value)}
+            value={localFilters.category || ''}
+            onChange={(e) => updateLocalFilter('category', e.target.value)}
             className="form-input"
           >
             <option value="">All Categories</option>
@@ -116,8 +146,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
         <div>
           <label className="form-label">Payment Method</label>
           <select
-            value={filters.paymentMethod || ''}
-            onChange={(e) => updateFilter('paymentMethod', e.target.value)}
+            value={localFilters.paymentMethod || ''}
+            onChange={(e) => updateLocalFilter('paymentMethod', e.target.value)}
             className="form-input"
           >
             <option value="">All Methods</option>
@@ -136,8 +166,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
             step="0.01"
             label="Min Amount"
             placeholder="0.00"
-            value={filters.minAmount || ''}
-            onChange={(e) => updateFilter('minAmount', e.target.value ? parseFloat(e.target.value) : undefined)}
+            value={localFilters.minAmount?.toString() || ''}
+            onChange={(e) => updateLocalFilter('minAmount', e.target.value ? parseFloat(e.target.value) : undefined)}
           />
         </div>
 
@@ -147,8 +177,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
             step="0.01"
             label="Max Amount"
             placeholder="1000.00"
-            value={filters.maxAmount || ''}
-            onChange={(e) => updateFilter('maxAmount', e.target.value ? parseFloat(e.target.value) : undefined)}
+            value={localFilters.maxAmount?.toString() || ''}
+            onChange={(e) => updateLocalFilter('maxAmount', e.target.value ? parseFloat(e.target.value) : undefined)}
           />
         </div>
 
@@ -156,8 +186,8 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
         <div>
           <label className="form-label">Sort By</label>
           <select
-            value={filters.sortBy || 'date'}
-            onChange={(e) => updateFilter('sortBy', e.target.value)}
+            value={localFilters.sortBy || 'date'}
+            onChange={(e) => updateLocalFilter('sortBy', e.target.value)}
             className="form-input"
           >
             <option value="date">Date</option>
@@ -170,13 +200,35 @@ export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
         <div>
           <label className="form-label">Sort Order</label>
           <select
-            value={filters.sortOrder || 'desc'}
-            onChange={(e) => updateFilter('sortOrder', e.target.value)}
+            value={localFilters.sortOrder || 'desc'}
+            onChange={(e) => updateLocalFilter('sortOrder', e.target.value)}
             className="form-input"
           >
             <option value="desc">Newest First</option>
             <option value="asc">Oldest First</option>
           </select>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+        <div className="text-sm text-gray-500">
+          {hasUnappliedChanges && (
+            <span className="text-amber-600 font-medium">
+              You have unsaved filter changes
+            </span>
+          )}
+        </div>
+        <div className="flex items-center space-x-3">
+          <Button
+            variant="secondary"
+            onClick={applyFilters}
+            disabled={!hasUnappliedChanges}
+            className={hasUnappliedChanges ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Apply Filters
+          </Button>
         </div>
       </div>
     </div>

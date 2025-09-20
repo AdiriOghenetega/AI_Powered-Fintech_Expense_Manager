@@ -32,4 +32,5 @@ export interface CreateExpenseData {
   isRecurring?: boolean;
   tags?: string[];
   notes?: string;
+  receiptUrl?: string;
 }

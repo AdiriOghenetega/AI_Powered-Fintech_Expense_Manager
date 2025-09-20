@@ -5,6 +5,7 @@ import {
   getTrends,
   getCategoryAnalysis,
   getBudgetPerformance,
+  getSpendingInsights,
 } from '../controllers/analyticsController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -30,5 +31,6 @@ router.get('/overview', getOverview);
 router.get('/trends', getTrends);
 router.get('/categories', getCategoryAnalysis);
 router.get('/budget-performance', getBudgetPerformance);
+router.get('/insights', getSpendingInsights);
 
 export default router;

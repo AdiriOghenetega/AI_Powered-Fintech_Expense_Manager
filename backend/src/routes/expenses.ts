@@ -7,6 +7,11 @@ import {
   deleteExpense,
   categorizeExpense,
   getCategories,
+  bulkImport,
+  getExpenseById,
+  getExpenseStats,
+  getRecurringExpenses,
+  getExpenseTags,
 } from '../controllers/expenseController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -18,16 +23,29 @@ const generalLimiter = rateLimit({
   message: { success: false, message: 'Too many requests' },
 });
 
+const bulkLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 bulk imports per hour
+  message: { success: false, message: 'Too many bulk import requests' },
+});
+
 // All routes require authentication
 router.use(authenticateToken);
 router.use(generalLimiter);
 
-// Expense routes
+// Expense CRUD routes
 router.get('/', getExpenses);
 router.post('/', createExpense);
+router.get('/stats', getExpenseStats);
+router.get('/recurring', getRecurringExpenses);
+router.get('/tags', getExpenseTags);
+router.get('/:id', getExpenseById);
 router.put('/:id', updateExpense);
 router.delete('/:id', deleteExpense);
 router.post('/:id/categorize', categorizeExpense);
+
+// Bulk operations
+router.post('/bulk/import', bulkLimiter, bulkImport);
 
 // Category routes
 router.get('/categories/list', getCategories);

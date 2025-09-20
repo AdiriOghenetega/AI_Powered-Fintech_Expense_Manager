@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Download, Upload, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ExpenseCard } from './ExpenseCard';
@@ -107,14 +107,6 @@ export const ExpenseList: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-3 mt-4 sm:mt-0">
-            <Button variant="secondary" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Button variant="secondary" size="sm">
-              <Upload className="h-4 w-4 mr-2" />
-              Import
-            </Button>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Expense
@@ -146,9 +138,6 @@ export const ExpenseList: React.FC = () => {
         {/* Expense List */}
         {expenses.length === 0 ? (
           <div className="text-center py-12">
-            <div className="mx-auto h-24 w-24 text-gray-300 mb-4">
-              💳
-            </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               No expenses found
             </h3>
@@ -221,7 +210,7 @@ export const ExpenseList: React.FC = () => {
 
         {/* Loading states for mutations */}
         {(deleteExpense.isPending || categorizeExpense.isPending) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+          <div className="fixed inset-0 bg-black/70 bg-opacity-50 flex items-center justify-center z-40">
             <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
               <Loader2 className="h-6 w-6 animate-spin" />
               <span>
