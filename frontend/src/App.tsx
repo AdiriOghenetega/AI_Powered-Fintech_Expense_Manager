@@ -7,6 +7,7 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { RegisterForm } from '@/components/auth/RegisterForm';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Dashboard } from '@/components/dashboard/Dashboard';
+import { ReportsPage } from '@/pages/Reports';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,8 +32,8 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   const handleLogout = () => {
-    logout();
-    // redirect to login page after logout
+    logout()
+    // redirect to login
     window.location.href = '/login';
   }
 
@@ -123,12 +124,12 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-// Simple placeholder pages
+// Placeholder pages
 const ExpensesPage: React.FC = () => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div className="text-center py-12">
       <h1 className="text-2xl font-bold text-gray-900 mb-4">Expenses</h1>
-      <p className="text-gray-600">Expense management coming soon...</p>
+      <p className="text-gray-600">Expense management system from previous implementation</p>
     </div>
   </div>
 );
@@ -137,26 +138,16 @@ const AnalyticsPage: React.FC = () => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <div className="text-center py-12">
       <h1 className="text-2xl font-bold text-gray-900 mb-4">Analytics</h1>
-      <p className="text-gray-600">Advanced analytics coming soon...</p>
+      <p className="text-gray-600">Analytics dashboard from previous implementation</p>
     </div>
   </div>
 );
 
-const ReportsPage: React.FC = () => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div className="text-center py-12">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">Reports</h1>
-      <p className="text-gray-600">Report generation coming soon...</p>
-    </div>
-  </div>
-);
-
-// Forgot Password placeholder
 const ForgotPasswordPage: React.FC = () => (
   <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
     <div className="sm:mx-auto sm:w-full sm:max-w-md">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-blue-600 mb-2">��� FinTech</h1>
+        <h1 className="text-3xl font-bold text-blue-600 mb-2">💰 FinTech</h1>
         <h2 className="text-2xl font-bold text-gray-900">Reset your password</h2>
         <p className="mt-2 text-sm text-gray-600">
           Password reset functionality coming soon
@@ -192,7 +183,7 @@ const AppContent: React.FC = () => {
               <PublicRoute>
                 <RegisterForm />
               </PublicRoute>
-            } 
+                          } 
           />
           <Route 
             path="/forgot-password" 

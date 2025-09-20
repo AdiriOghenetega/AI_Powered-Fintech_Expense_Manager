@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 
 import authRoutes from './routes/auth';
 import expenseRoutes from './routes/expenses';
+import analyticsRoutes from './routes/analytics';
+import reportRoutes from './routes/reports';
 import { errorHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
 
@@ -49,6 +51,8 @@ app.get('/health', async (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.use(errorHandler);
 
