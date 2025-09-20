@@ -1,0 +1,253 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { AuthContext, useAuthState } from '@/hooks/useAuth';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { RegisterForm } from '@/components/auth/RegisterForm';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Dashboard } from '@/components/dashboard/Dashboard';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
+    },
+  },
+});
+
+const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, logout } = useAuthState();
+  const location = useLocation();
+
+  const getNavItemClass = (path: string) => {
+    const isActive = location.pathname === path;
+    return `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+      isActive
+        ? 'border-blue-500 text-gray-900'
+        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+    }`;
+  };
+
+  const handleLogout = () => {
+    logout();
+    // redirect to login page after logout
+    window.location.href = '/login';
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <h1 className="text-xl font-bold text-blue-600">FinTech Dashboard</h1>
+              </div>
+              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                <a href="/dashboard" className={getNavItemClass('/dashboard')}>
+                  Dashboard
+                </a>
+                <a href="/expenses" className={getNavItemClass('/expenses')}>
+                  Expenses
+                </a>
+                <a href="/analytics" className={getNavItemClass('/analytics')}>
+                  Analytics
+                </a>
+                <a href="/reports" className={getNavItemClass('/reports')}>
+                  Reports
+                </a>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-700">
+                <span className="font-medium">{user?.firstName} {user?.lastName}</span>
+                <div className="text-xs text-gray-500">{user?.email}</div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+      
+      <main>
+        {children}
+      </main>
+    </div>
+  );
+};
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuthState();
+  const location = useLocation();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <DashboardLayout>{children}</DashboardLayout>;
+};
+
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuthState();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Simple placeholder pages
+const ExpensesPage: React.FC = () => (
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="text-center py-12">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">Expenses</h1>
+      <p className="text-gray-600">Expense management coming soon...</p>
+    </div>
+  </div>
+);
+
+const AnalyticsPage: React.FC = () => (
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="text-center py-12">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">Analytics</h1>
+      <p className="text-gray-600">Advanced analytics coming soon...</p>
+    </div>
+  </div>
+);
+
+const ReportsPage: React.FC = () => (
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="text-center py-12">
+      <h1 className="text-2xl font-bold text-gray-900 mb-4">Reports</h1>
+      <p className="text-gray-600">Report generation coming soon...</p>
+    </div>
+  </div>
+);
+
+// Forgot Password placeholder
+const ForgotPasswordPage: React.FC = () => (
+  <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-blue-600 mb-2">��� FinTech</h1>
+        <h2 className="text-2xl font-bold text-gray-900">Reset your password</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          Password reset functionality coming soon
+        </p>
+      </div>
+      <div className="mt-8 text-center">
+        <a href="/login" className="text-blue-600 hover:text-blue-500">
+          ← Back to login
+        </a>
+      </div>
+    </div>
+  </div>
+);
+
+const AppContent: React.FC = () => {
+  const authState = useAuthState();
+
+  return (
+    <AuthContext.Provider value={authState}>
+      <Router>
+        <Routes>
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <LoginForm />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/register" 
+            element={
+              <PublicRoute>
+                <RegisterForm />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/forgot-password" 
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/expenses" 
+            element={
+              <ProtectedRoute>
+                <ExpensesPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/analytics" 
+            element={
+              <ProtectedRoute>
+                <AnalyticsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/reports" 
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </AuthContext.Provider>
+  );
+};
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+
+export default App;
