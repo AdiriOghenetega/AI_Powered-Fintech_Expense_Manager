@@ -21,8 +21,7 @@ const paymentMethods = [
 
 export const ExpenseFilters: React.FC<ExpenseFiltersProps> = ({
   filters,
-  onFiltersChange,
-  onClearFilters,
+  onFiltersChange
 }) => {
   const { data: categoriesData } = useCategories();
   

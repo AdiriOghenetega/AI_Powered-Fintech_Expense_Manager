@@ -13,6 +13,18 @@ import { ExpenseList } from '@/components/expenses/ExpenseList';
 import { ReportsPage } from '@/pages/Reports';
 import { BudgetsPage } from '@/pages/Budgets';
 import { AnalyticsPage } from '@/pages/Analytics';
+import { 
+  Home, 
+  CreditCard, 
+  Target, 
+  BarChart3, 
+  FileText, 
+  LogOut, 
+  User,
+  Menu,
+  X,
+  Plus
+} from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,13 +38,31 @@ const queryClient = new QueryClient({
 const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuthState();
   const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isScrolled, setIsScrolled] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const navigation = [
+    { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Expenses', href: '/expenses', icon: CreditCard },
+    { name: 'Budgets', href: '/budgets', icon: Target },
+    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { name: 'Reports', href: '/reports', icon: FileText },
+  ];
 
   const getNavItemClass = (path: string) => {
     const isActive = location.pathname === path;
-    return `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors ${
+    return `group relative flex items-center px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-300 ${
       isActive
-        ? 'border-blue-500 text-gray-900'
-        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+        ? 'text-blue-700 bg-blue-50/80 shadow-sm'
+        : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
     }`;
   };
 
@@ -42,49 +72,127 @@ const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+      {/* Sticky Header */}
+      <nav className={`sticky top-0 z-40 transition-all duration-300 ${
+        isScrolled 
+          ? 'bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm' 
+          : 'bg-white/60 backdrop-blur-sm border-b border-white/10'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
+            {/* Logo */}
             <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-xl font-bold text-blue-600">FinTech Dashboard</h1>
+              <div className="flex-shrink-0 flex items-center">
+                <h1 className="text-2xl font-bold text-gray-800"> Finance<span className="text-blue-600">.</span><span className="text-green-600">AI</span> </h1>
               </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <a href="/dashboard" className={getNavItemClass('/dashboard')}>
-                  Dashboard
-                </a>
-                <a href="/expenses" className={getNavItemClass('/expenses')}>
-                  Expenses
-                </a>
-                <a href="/budgets" className={getNavItemClass('/budgets')}>
-                  Budgets
-                </a>
-                <a href="/analytics" className={getNavItemClass('/analytics')}>
-                  Analytics
-                </a>
-                <a href="/reports" className={getNavItemClass('/reports')}>
-                  Reports
-                </a>
+              
+              {/* Desktop Navigation */}
+              <div className="hidden lg:ml-10 lg:flex lg:space-x-2">
+                {navigation.map((item) => {
+                  const IconComponent = item.icon;
+                  const isActive = location.pathname === item.href;
+                  return (
+                    <a
+                      key={item.name}
+                      href={item.href}
+                      className={getNavItemClass(item.href)}
+                    >
+                      {isActive && <IconComponent className="h-4 w-4 mr-2" />}
+                      {item.name}
+                      {isActive && (
+                        <div className="absolute inset-0 bg-blue-100/50 rounded-xl -z-10 scale-105 opacity-0 group-hover:opacity-100 transition-all duration-300" />
+                      )}
+                    </a>
+                  );
+                })}
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">{user?.firstName} {user?.lastName}</span>
-                <div className="text-xs text-gray-500">{user?.email}</div>
+
+            {/* Desktop User Menu */}
+            <div className="hidden lg:flex lg:items-center lg:space-x-4">
+              <div className="flex items-center space-x-3 px-4 py-2 bg-white/60 rounded-xl border border-white/20">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="text-sm">
+                    <div className="font-semibold text-gray-900">{user?.firstName} {user?.lastName}</div>
+                    <div className="text-xs text-gray-500">{user?.email}</div>
+                  </div>
+                </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-xl transition-all duration-300"
+                title="Logout"
               >
-                Logout
+                <LogOut className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Mobile menu button */}
+            <div className="flex items-center lg:hidden">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-xl transition-all duration-300"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
               </button>
             </div>
           </div>
         </div>
+
+        {/* Mobile Navigation Menu */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden border-t border-white/20 bg-white/80 backdrop-blur-md">
+            <div className="px-4 py-6 space-y-3">
+              {navigation.map((item) => {
+                const IconComponent = item.icon;
+                return (
+                  <a
+                    key={item.name}
+                    href={item.href}
+                    className={getNavItemClass(item.href)}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <IconComponent className="h-5 w-5 mr-3" />
+                    {item.name}
+                  </a>
+                );
+              })}
+              
+              {/* Mobile User Info */}
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50/80 rounded-xl">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">
+                      {user?.firstName} {user?.lastName}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{user?.email}</div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-lg transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
       
-      <main>
+      {/* Main Content */}
+      <main className="flex-1">
         {children}
       </main>
     </div>
@@ -97,10 +205,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
         <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 float-animation">
+            <CreditCard className="h-8 w-8 text-white" />
+          </div>
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600 font-medium">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -118,8 +229,10 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
+        <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center float-animation">
+          <CreditCard className="h-8 w-8 text-white" />
+        </div>
       </div>
     );
   }
@@ -213,11 +326,17 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           {/* 404 Route */}
           <Route path="*" element={
-            <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
               <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                <p className="text-gray-600 mb-6">Page not found</p>
-                <a href="/dashboard" className="text-blue-600 hover:text-blue-500">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-4xl text-white">404</span>
+                </div>
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">Page not found</h1>
+                <p className="text-gray-600 mb-6">The page you're looking for doesn't exist.</p>
+                <a 
+                  href="/dashboard" 
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl"
+                >
                   Return to Dashboard
                 </a>
               </div>

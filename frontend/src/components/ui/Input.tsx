@@ -22,7 +22,7 @@ export const Input: React.FC<InputProps> = ({
       )}
       <div className="relative">
         {icon && (
-          <div className="absolute left-3 top-3 h-4 w-4 text-gray-400">
+          <div className="absolute left-3 top-3 text-blue-400/80">
             {icon}
           </div>
         )}
