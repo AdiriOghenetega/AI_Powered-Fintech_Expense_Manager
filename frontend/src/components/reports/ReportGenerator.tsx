@@ -4,16 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { 
   Calendar, 
-  FileText, 
-  PieChart, 
-  Download,
+  FileText,
   Settings,
   X,
   Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
 import { useCategories } from '@/hooks/useExpenses';
 import { useCreateReport } from '@/hooks/useReports';
 import type { CreateReportRequest } from '@/types/report';
@@ -286,6 +283,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
               Cancel
             </Button>
             <Button
+            variant='gradient'
               type="submit"
               loading={createReport.isPending}
               className="flex-1"

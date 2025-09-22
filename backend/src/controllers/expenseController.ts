@@ -221,22 +221,21 @@ export const createExpense = asyncHandler(async (req: AuthRequest, res: Response
   let aiProcessing = false;
 
   try {
-    // If no category provided, use default and process AI in background
+    // If no category provided, use default
     if (!categoryId) {
-      // Get or create default category quickly
       const defaultCategory = await getOrCreateDefaultCategory();
       categoryId = defaultCategory.id;
       aiProcessing = true;
     }
 
-    // Create expense immediately
+    // Create expense immediately (this should work regardless of queue issues)
     const expense = await prisma.expense.create({
       data: {
         ...validatedData,
         userId,
         categoryId,
         transactionDate: new Date(validatedData.transactionDate),
-        aiConfidence: aiProcessing ? 0.1 : undefined, // Placeholder confidence
+        aiConfidence: aiProcessing ? 0.1 : undefined,
       },
       include: {
         category: {
@@ -245,21 +244,31 @@ export const createExpense = asyncHandler(async (req: AuthRequest, res: Response
       },
     });
 
-    // Process AI categorization in background if needed
+    // Try to process AI categorization in background, but don't fail if queue is down
     if (aiProcessing) {
-      await jobQueue.add('categorize-expense', {
-        expenseId: expense.id,
-        expenseData: {
-          description: validatedData.description,
-          merchant: validatedData.merchant,
-          amount: validatedData.amount,
-          paymentMethod: validatedData.paymentMethod,
-        }
-      });
+      try {
+        await jobQueue.add('categorize-expense', {
+          expenseId: expense.id,
+          expenseData: {
+            description: validatedData.description,
+            merchant: validatedData.merchant,
+            amount: validatedData.amount,
+            paymentMethod: validatedData.paymentMethod,
+          }
+        });
+        logger.info(`AI categorization queued for expense ${expense.id}`);
+      } catch (queueError) {
+        logger.warn(`Queue failed for expense ${expense.id}, will process later:`, queueError);
+        // Don't throw error - expense is already created successfully
+      }
     }
 
-    // Invalidate caches
-    await invalidateUserCache(userId, [`expenses:${userId}:*`, `overview:${userId}:*`, `analytics:${userId}:*`]);
+    // Invalidate caches (but don't fail if cache is down)
+    try {
+      await invalidateUserCache(userId, [`expenses:${userId}:*`, `overview:${userId}:*`, `analytics:${userId}:*`]);
+    } catch (cacheError) {
+      logger.warn('Cache invalidation failed:', cacheError);
+    }
 
     const response = {
       success: true,
@@ -272,8 +281,8 @@ export const createExpense = asyncHandler(async (req: AuthRequest, res: Response
         },
         ...(aiProcessing && {
           processing: {
-            aiCategorization: 'processing in background',
-            estimatedTime: '30 seconds'
+            aiCategorization: 'queued for background processing',
+            note: 'AI categorization will be processed when available'
           }
         })
       },

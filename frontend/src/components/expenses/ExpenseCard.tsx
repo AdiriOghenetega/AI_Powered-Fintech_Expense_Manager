@@ -307,7 +307,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
         {/* Mobile: Stack vertically */}
         <div className="flex flex-col space-y-1 sm:hidden text-xs text-gray-400">
           <span>Created {formatDate(expense.createdAt)}</span>
-          {expense.createdAt !== expense.updatedAt && (
+          {expense.updatedAt && (
             <span className="flex items-center space-x-1">
               <Edit className="h-2.5 w-2.5" />
               <span>Updated {formatDate(expense.updatedAt)}</span>
@@ -318,7 +318,7 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({
         {/* Desktop: Side by side */}
         <div className="hidden sm:flex justify-between items-center text-xs text-gray-400">
           <span>Created {formatDate(expense.createdAt)}</span>
-          {expense.createdAt !== expense.updatedAt && (
+          {expense.updatedAt && (
             <span className="flex items-center space-x-1">
               <Edit className="h-3 w-3" />
               <span>Updated {formatDate(expense.updatedAt)}</span>

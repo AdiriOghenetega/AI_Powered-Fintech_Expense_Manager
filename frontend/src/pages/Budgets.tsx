@@ -63,7 +63,7 @@ export const BudgetsPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900">Budgets</h1>
             <p className="text-gray-600 mt-1">Manage your spending limits and track progress</p>
           </div>
-          <Button onClick={() => setShowForm(true)}>
+          <Button variant='gradient' onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Create Budget
           </Button>
@@ -91,7 +91,7 @@ export const BudgetsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Budget Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">${stats.totalBudgetAmount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-gray-900">₦{stats.totalBudgetAmount.toFixed(2)}</p>
                 </div>
               </div>
             </Card>
@@ -103,7 +103,7 @@ export const BudgetsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Spent</p>
-                  <p className="text-2xl font-bold text-gray-900">${stats.totalSpent.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-gray-900">₦{stats.totalSpent.toFixed(2)}</p>
                 </div>
               </div>
             </Card>
@@ -175,7 +175,7 @@ export const BudgetsPage: React.FC = () => {
               <p className="text-gray-600 mb-6">
                 Create your first budget to start tracking your spending limits.
               </p>
-              <Button onClick={() => setShowForm(true)}>
+              <Button variant='gradient' onClick={() => setShowForm(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Budget
               </Button>

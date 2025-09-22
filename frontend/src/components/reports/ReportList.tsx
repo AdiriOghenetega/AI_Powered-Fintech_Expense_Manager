@@ -140,6 +140,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
               </Button>
               
               <Button 
+              variant='gradient'
                 onClick={onGenerateNew}
                 icon={<Plus className="h-4 w-4" />}
                 className="flex-1 sm:flex-none"

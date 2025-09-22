@@ -93,6 +93,13 @@ model Expense {
   @@index([userId, transactionDate(sort: Desc)])
   @@index([userId, categoryId, transactionDate])
   @@index([categoryId])
+  @@index([userId, transactionDate, amount], name: "idx_user_date_amount")
+  @@index([transactionDate, userId], name: "idx_date_user")  
+  @@index([userId, amount], name: "idx_user_amount")
+  @@index([categoryId, transactionDate, amount], name: "idx_category_date_amount")
+  @@index([userId, createdAt], name: "idx_user_created")
+  @@index([transactionDate], name: "idx_transaction_date")
+  
   @@map("expenses")
 }
 
@@ -121,6 +128,12 @@ model Budget {
 
   @@unique([userId, categoryId, period, startDate])
   @@index([userId, categoryId])
+  @@index([userId, isActive, period], name: "idx_user_active_period")
+  @@index([userId, startDate, endDate], name: "idx_user_date_range")  
+  @@index([isActive, startDate, endDate], name: "idx_active_date_range")
+  @@index([userId, isActive, startDate, endDate], name: "idx_user_active_dates")
+  @@index([period, isActive], name: "idx_period_active")
+  
   @@map("budgets")
 }
 

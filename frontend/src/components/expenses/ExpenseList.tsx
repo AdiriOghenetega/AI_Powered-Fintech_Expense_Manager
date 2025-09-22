@@ -193,6 +193,7 @@ export const ExpenseList: React.FC = () => {
                 {showFilters ? 'Hide Filters' : 'Show Filters'}
               </Button>
               <Button 
+               variant='gradient'
                 onClick={() => setShowForm(true)}
                 icon={<Plus className="h-4 w-4" />}
                 className="flex"

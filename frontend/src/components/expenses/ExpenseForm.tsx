@@ -3,13 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { 
-  X, 
-  DollarSign, 
-  Calendar, 
-  MapPin, 
-  CreditCard,
+  X,
   Tag,
-  FileText,
   Bot,
   Upload,
   Repeat,
@@ -20,7 +15,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
 import { useCategories, useCreateExpense, useUpdateExpense } from '@/hooks/useExpenses';
 import { uploadService, type UploadedReceipt } from '@/services/uploadService';
 import type { Expense, CreateExpenseData } from '@/types/expense';
@@ -532,6 +526,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onClose, onSu
               Cancel
             </Button>
             <Button
+              variant='gradient'
               type="submit"
               loading={isSubmitting}
               disabled={isUploading}

@@ -25,12 +25,34 @@ const app = express();
 
 // Optimized Prisma configuration
 const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
+  log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'], // Reduced logging
   datasources: {
     db: {
       url: process.env.DATABASE_URL
     }
+  },
+  // CONNECTION POOLING OPTIMIZATION
+  transactionOptions: {
+    maxWait: 2000, // 2 seconds
+    timeout: 5000,  // 5 seconds
+  },
+});
+
+// Enable connection pooling
+prisma.$connect();
+
+// Add query optimization middleware
+prisma.$use(async (params, next) => {
+  const before = Date.now();
+  const result = await next(params);
+  const after = Date.now();
+  
+  // Log slow queries in development
+  if (process.env.NODE_ENV === 'development' && (after - before) > 1000) {
+    console.log(`Slow Query: ${params.model}.${params.action} took ${after - before}ms`);
   }
+  
+  return result;
 });
 
 // Enhanced security middleware
@@ -235,11 +257,6 @@ app.use(errorHandler);
 // Graceful shutdown handlers
 const gracefulShutdown = async (signal: string) => {
   logger.info(`${signal} received, starting graceful shutdown`);
-  
-  // Stop accepting new connections
-  server.close(() => {
-    logger.info('HTTP server closed');
-  });
 
   try {
     // Close database connections

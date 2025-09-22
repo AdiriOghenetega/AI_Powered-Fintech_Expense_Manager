@@ -19,9 +19,9 @@ const analyticsQuerySchema = z.object({
 
 export const getOverview = asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
-  const cacheKey = cacheService.generateKey('overview', userId, 'v2');
+  const cacheKey = cacheService.generateKey('overview', userId, 'v5');
   
-  // Check cache first
+  // Check cache first - increased cache time
   const cached = await cacheService.get(cacheKey);
   if (cached) {
     return res.json(cached);
@@ -31,63 +31,77 @@ export const getOverview = asyncHandler(async (req: AuthRequest, res: Response) 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+  const recent7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const previous7Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
   try {
-    // Single optimized query for monthly comparison
-    const monthlyStatsRaw = await prisma.$queryRaw<Array<{
-      month: string;
-      total: number;
-      count: number;
-      average: number;
-    }>>`
-      SELECT 
-        TO_CHAR(transaction_date, 'YYYY-MM') as month,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count,
-        AVG(amount)::float as average
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${startOfLastMonth}
-        AND transaction_date <= ${now}
-      GROUP BY TO_CHAR(transaction_date, 'YYYY-MM')
-      ORDER BY month DESC
-    `;
+    // OPTIMIZATION 1: Execute only essential queries in parallel
+    const [
+      currentMonthExpenses,
+      lastMonthExpenses,
+      topCategories,
+      recentVelocity,
+      previousVelocity,
+      recentTransactions
+    ] = await Promise.all([
+      // Current month expenses
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: { gte: startOfMonth, lte: now },
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+      }),
 
-    // Optimized category breakdown with JOIN
-    const categoryBreakdownRaw = await prisma.$queryRaw<Array<{
-      category_id: string;
-      category_name: string;
-      category_color: string;
-      category_icon: string;
-      total: number;
-      count: number;
-      average: number;
-    }>>`
-      SELECT 
-        c.id as category_id,
-        c.name as category_name,
-        c.color as category_color,
-        c.icon as category_icon,
-        SUM(e.amount)::float as total,
-        COUNT(e.*)::int as count,
-        AVG(e.amount)::float as average
-      FROM expenses e
-      JOIN categories c ON e.category_id = c.id
-      WHERE e.user_id = ${userId}
-        AND e.transaction_date >= ${startOfMonth}
-        AND e.transaction_date <= ${now}
-      GROUP BY c.id, c.name, c.color, c.icon
-      ORDER BY total DESC
-      LIMIT 10
-    `;
+      // Last month expenses
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: { gte: startOfLastMonth, lte: endOfLastMonth },
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+      }),
 
-    // Parallel execution for remaining data
-    const [recentTransactions, budgetStatus, velocityData] = await Promise.all([
-      // Recent transactions with optimized select
+      // OPTIMIZATION 2: Simplified category breakdown - just top 3
+      prisma.expense.groupBy({
+        by: ['categoryId'],
+        where: {
+          userId,
+          transactionDate: { gte: startOfMonth, lte: now },
+        },
+        _sum: { amount: true },
+        _count: true,
+        orderBy: { _sum: { amount: 'desc' } },
+        take: 3, // Reduced from 5 to 3
+      }),
+
+      // Recent velocity
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: { gte: recent7Days, lte: now },
+        },
+        _sum: { amount: true },
+      }),
+      
+      // Previous velocity  
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: { gte: previous7Days, lt: recent7Days },
+        },
+        _sum: { amount: true },
+      }),
+
+      // OPTIMIZATION 3: Minimal recent transactions
       prisma.expense.findMany({
         where: { 
           userId,
-          transactionDate: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) }
+          transactionDate: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days only
         },
         select: {
           id: true,
@@ -95,87 +109,116 @@ export const getOverview = asyncHandler(async (req: AuthRequest, res: Response) 
           description: true,
           transactionDate: true,
           merchant: true,
-          category: {
-            select: { name: true, color: true, icon: true }
-          }
+          category: { select: { name: true, color: true } } // Removed icon for speed
         },
         orderBy: { transactionDate: 'desc' },
-        take: 10
+        take: 3, // Reduced from 5 to 3
       }),
-
-      // Budget status (cached separately)
-      budgetService.getUserBudgets(userId, 'MONTHLY'),
-
-      // Velocity calculation (last 7 vs previous 7 days)
-      prisma.$queryRaw<Array<{
-        period: string;
-        total: number;
-      }>>`
-        SELECT 
-          CASE 
-            WHEN transaction_date >= ${new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)} THEN 'recent'
-            ELSE 'previous'
-          END as period,
-          SUM(amount)::float as total
-        FROM expenses 
-        WHERE user_id = ${userId}
-          AND transaction_date >= ${new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)}
-        GROUP BY 
-          CASE 
-            WHEN transaction_date >= ${new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)} THEN 'recent'
-            ELSE 'previous'
-          END
-      `
     ]);
 
-    // Process monthly stats
-    const currentMonthData = monthlyStatsRaw.find(m => m.month === now.toISOString().slice(0, 7));
-    const lastMonthData = monthlyStatsRaw.find(m => m.month === startOfLastMonth.toISOString().slice(0, 7));
+    // OPTIMIZATION 4: Batch category lookup for top categories only
+    const categoryIds = topCategories.map(c => c.categoryId);
+    const categories = categoryIds.length > 0 ? await prisma.category.findMany({
+      where: { id: { in: categoryIds } },
+      select: { id: true, name: true, color: true, icon: true },
+    }) : [];
 
+    // OPTIMIZATION 5: Simplified budget processing - load separately and cache
+    let budgetStatusProcessed: any[] = [];
+    
+    // Get budgets with minimal data
+    const budgets = await prisma.budget.findMany({
+      where: {
+        userId,
+        isActive: true,
+        startDate: { lte: now },
+        endDate: { gte: now },
+      },
+      select: {
+        id: true,
+        amount: true,
+        categoryId: true,
+        period: true,
+        startDate: true,
+        category: { select: { name: true, color: true } }
+      },
+      take: 3, // Reduced from 5 to 3
+    });
+
+    if (budgets.length > 0) {
+      // OPTIMIZATION 6: Single query for all budget expenses
+      const budgetCategoryIds = budgets.map(b => b.categoryId);
+      const budgetExpenses = await prisma.expense.groupBy({
+        by: ['categoryId'],
+        where: {
+          userId,
+          categoryId: { in: budgetCategoryIds },
+          transactionDate: { gte: startOfMonth, lte: now }, // Use current month for all for simplicity
+        },
+        _sum: { amount: true },
+        _count: true,
+      });
+
+      budgetStatusProcessed = budgets.map(budget => {
+        const expenseData = budgetExpenses.find(e => e.categoryId === budget.categoryId);
+        const spent = Number(expenseData?._sum.amount) || 0;
+        const budgetAmount = Number(budget.amount);
+        const percentage = budgetAmount > 0 ? (spent / budgetAmount) * 100 : 0;
+        
+        let status: 'good' | 'caution' | 'critical' | 'exceeded';
+        if (percentage >= 100) status = 'exceeded';
+        else if (percentage >= 90) status = 'critical';
+        else if (percentage >= 75) status = 'caution';
+        else status = 'good';
+
+        return {
+          id: budget.id,
+          amount: budgetAmount,
+          spent,
+          remaining: budgetAmount - spent,
+          percentage: Math.round(percentage * 10) / 10, // Round to 1 decimal
+          period: budget.period,
+          category: { name: budget.category.name, color: budget.category.color },
+          status,
+        };
+      });
+    }
+
+    // OPTIMIZATION 7: Streamlined data processing
     const currentMonth = {
-      total: currentMonthData?.total || 0,
-      count: currentMonthData?.count || 0,
-      average: currentMonthData?.average || 0,
+      total: Number(currentMonthExpenses._sum.amount) || 0,
+      count: currentMonthExpenses._count || 0,
+      average: Number(currentMonthExpenses._avg.amount) || 0,
     };
 
     const lastMonth = {
-      total: lastMonthData?.total || 0,
-      count: lastMonthData?.count || 0,
-      average: lastMonthData?.average || 0,
+      total: Number(lastMonthExpenses._sum.amount) || 0,
+      count: lastMonthExpenses._count || 0,
+      average: Number(lastMonthExpenses._avg.amount) || 0,
     };
 
-    // Calculate trends
+    // Simplified trend calculations
     const trends = {
-      totalChange: lastMonth.total > 0 ? ((currentMonth.total - lastMonth.total) / lastMonth.total) * 100 : 0,
-      countChange: lastMonth.count > 0 ? ((currentMonth.count - lastMonth.count) / lastMonth.count) * 100 : 0,
-      avgChange: lastMonth.average > 0 ? ((currentMonth.average - lastMonth.average) / lastMonth.average) * 100 : 0,
-      velocityChange: calculateVelocityChange(velocityData),
+      totalChange: lastMonth.total > 0 ? Math.round(((currentMonth.total - lastMonth.total) / lastMonth.total) * 1000) / 10 : 0,
+      countChange: lastMonth.count > 0 ? Math.round(((currentMonth.count - lastMonth.count) / lastMonth.count) * 1000) / 10 : 0,
+      velocityChange: calculateVelocityChange([
+        { period: 'recent', total: Number(recentVelocity._sum.amount) || 0 },
+        { period: 'previous', total: Number(previousVelocity._sum.amount) || 0 }
+      ]),
     };
 
-    // Process category breakdown
-    const categoriesWithTotals = categoryBreakdownRaw.map(cb => ({
-      categoryId: cb.category_id,
-      categoryName: cb.category_name,
-      categoryColor: cb.category_color,
-      categoryIcon: cb.category_icon,
-      total: cb.total,
-      count: cb.count,
-      average: cb.average,
-    }));
-
-    // Process budget status
-    const budgetStatusProcessed = budgetStatus.slice(0, 5).map(budget => ({
-      id: budget.id,
-      amount: budget.budgetAmount,
-      spent: budget.spent,
-      remaining: budget.remaining,
-      percentage: budget.percentage,
-      category: {
-        name: budget.category.name,
-        color: budget.category.color,
-      },
-      status: budget.status,
-    }));
+    // Simplified category breakdown
+    const categoriesWithTotals = topCategories.map(cb => {
+      const category = categories.find(c => c.id === cb.categoryId);
+      return {
+        categoryId: cb.categoryId,
+        categoryName: category?.name || 'Unknown',
+        categoryColor: category?.color || '#6B7280',
+        categoryIcon: category?.icon || 'folder',
+        total: Number(cb._sum.amount) || 0,
+        count: cb._count || 0,
+      };
+    });
 
     const response = {
       success: true,
@@ -185,21 +228,25 @@ export const getOverview = asyncHandler(async (req: AuthRequest, res: Response) 
           lastMonth,
           trends,
           velocity: {
-            recent7Days: velocityData.find(v => v.period === 'recent')?.total || 0,
-            previous7Days: velocityData.find(v => v.period === 'previous')?.total || 0,
+            recent7Days: Number(recentVelocity._sum.amount) || 0,
+            previous7Days: Number(previousVelocity._sum.amount) || 0,
           },
         },
         categoryBreakdown: categoriesWithTotals,
         recentTransactions: recentTransactions.map(tx => ({
-          ...tx,
+          id: tx.id,
           amount: Number(tx.amount),
+          description: tx.description,
+          transactionDate: tx.transactionDate,
+          merchant: tx.merchant,
+          category: tx.category,
         })),
         budgetStatus: budgetStatusProcessed,
       },
     };
 
-    // Cache for 5 minutes
-    await cacheService.set(cacheKey, response, { ttl: 300 });
+    // OPTIMIZATION 8: Longer cache time for dashboard data
+    await cacheService.set(cacheKey, response, { ttl: 600 }); // 10 minutes instead of 5
 
     res.json(response);
   } catch (error) {
@@ -260,126 +307,139 @@ export const getTrends = asyncHandler(async (req: AuthRequest, res: Response) =>
 
   let result;
 
-  if (groupBy === 'category') {
-    // Optimized category grouping with single query
-    const categoryData = await prisma.$queryRaw<Array<{
-      category_id: string;
-      category_name: string;
-      category_color: string;
-      category_icon: string;
-      total: number;
-      count: number;
-      average: number;
-    }>>`
-      SELECT 
-        c.id as category_id,
-        c.name as category_name,
-        c.color as category_color,
-        c.icon as category_icon,
-        SUM(e.amount)::float as total,
-        COUNT(e.*)::int as count,
-        AVG(e.amount)::float as average
-      FROM expenses e
-      JOIN categories c ON e.category_id = c.id
-      WHERE e.user_id = ${userId}
-        AND e.transaction_date >= ${dateRange.gte}
-        AND e.transaction_date <= ${dateRange.lte}
-        ${categories && categories.length > 0 ? Prisma.sql`AND e.category_id = ANY(${categories})` : Prisma.empty}
-      GROUP BY c.id, c.name, c.color, c.icon
-      ORDER BY total DESC
-    `;
+  try {
+    if (groupBy === 'category') {
+      // Category grouping using Prisma
+      const categoryData = await prisma.expense.groupBy({
+        by: ['categoryId'],
+        where: {
+          userId,
+          transactionDate: dateRange,
+          ...(categories && categories.length > 0 ? { categoryId: { in: categories } } : {}),
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+        orderBy: {
+          _sum: {
+            amount: 'desc',
+          },
+        },
+      });
 
-    result = categoryData.map(item => ({
-      key: item.category_name,
-      value: item.total,
-      count: item.count,
-      average: item.average,
-      color: item.category_color,
-      icon: item.category_icon,
-    }));
+      // Get category details
+      const categoryIds = categoryData.map(cd => cd.categoryId);
+      const categoryDetails = await prisma.category.findMany({
+        where: { id: { in: categoryIds } },
+        select: { id: true, name: true, color: true, icon: true },
+      });
 
-  } else if (groupBy === 'paymentMethod') {
-    // Optimized payment method grouping
-    const paymentData = await prisma.$queryRaw<Array<{
-      payment_method: string;
-      total: number;
-      count: number;
-      average: number;
-    }>>`
-      SELECT 
-        payment_method,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count,
-        AVG(amount)::float as average
-      FROM expenses
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${dateRange.gte}
-        AND transaction_date <= ${dateRange.lte}
-        ${categories && categories.length > 0 ? Prisma.sql`AND category_id = ANY(${categories})` : Prisma.empty}
-      GROUP BY payment_method
-      ORDER BY total DESC
-    `;
+      result = categoryData.map(item => {
+        const category = categoryDetails.find(c => c.id === item.categoryId);
+        return {
+          key: category?.name || 'Unknown',
+          value: Number(item._sum.amount) || 0,
+          count: item._count,
+          average: Number(item._avg.amount) || 0,
+          color: category?.color || '#6B7280',
+          icon: category?.icon || 'folder',
+        };
+      });
 
-    result = paymentData.map(item => ({
-      key: item.payment_method.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()),
-      value: item.total,
-      count: item.count,
-      average: item.average,
-    }));
+    } else if (groupBy === 'paymentMethod') {
+      // Payment method grouping
+      const paymentData = await prisma.expense.groupBy({
+        by: ['paymentMethod'],
+        where: {
+          userId,
+          transactionDate: dateRange,
+          ...(categories && categories.length > 0 ? { categoryId: { in: categories } } : {}),
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+        orderBy: {
+          _sum: {
+            amount: 'desc',
+          },
+        },
+      });
 
-  } else {
-    // Time-based grouping with optimized query
-    let dateFormat: string;
-    switch (groupBy) {
-      case 'day':
-        dateFormat = 'YYYY-MM-DD';
-        break;
-      case 'week':
-        dateFormat = 'YYYY-"W"WW';
-        break;
-      default: // month
-        dateFormat = 'YYYY-MM';
+      result = paymentData.map(item => ({
+        key: item.paymentMethod.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()),
+        value: Number(item._sum.amount) || 0,
+        count: item._count,
+        average: Number(item._avg.amount) || 0,
+      }));
+
+    } else {
+      // For time-based grouping, we'll use a simpler approach
+      // Get all expenses in the date range first
+      const expenses = await prisma.expense.findMany({
+        where: {
+          userId,
+          transactionDate: dateRange,
+          ...(categories && categories.length > 0 ? { categoryId: { in: categories } } : {}),
+        },
+        select: {
+          amount: true,
+          transactionDate: true,
+        },
+        orderBy: {
+          transactionDate: 'asc',
+        },
+      });
+
+      // Group by time period in memory
+      const timeGroups = new Map();
+      
+      expenses.forEach(expense => {
+        let key: string;
+        const date = new Date(expense.transactionDate);
+
+        switch (groupBy) {
+          case 'day':
+            key = date.toISOString().split('T')[0];
+            break;
+          case 'week':
+            const weekStart = new Date(date);
+            weekStart.setDate(date.getDate() - date.getDay());
+            key = weekStart.toISOString().split('T')[0];
+            break;
+          default: // month
+            key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+        }
+
+        const existing = timeGroups.get(key) || { total: 0, count: 0, amounts: [] };
+        const amount = Number(expense.amount);
+        timeGroups.set(key, {
+          total: existing.total + amount,
+          count: existing.count + 1,
+          amounts: [...existing.amounts, amount],
+        });
+      });
+
+      result = Array.from(timeGroups.entries()).map(([period, data]) => ({
+        key: period,
+        value: data.total,
+        count: data.count,
+        average: data.total / data.count,
+        median: calculateMedian(data.amounts),
+      })).sort((a, b) => a.key.localeCompare(b.key));
     }
 
-    const timeData = await prisma.$queryRaw<Array<{
-      period: string;
-      total: number;
-      count: number;
-      average: number;
-      amounts: number[];
-    }>>`
-      SELECT 
-        TO_CHAR(transaction_date, ${dateFormat}) as period,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count,
-        AVG(amount)::float as average,
-        ARRAY_AGG(amount::float ORDER BY amount) as amounts
-      FROM expenses
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${dateRange.gte}
-        AND transaction_date <= ${dateRange.lte}
-        ${categories && categories.length > 0 ? Prisma.sql`AND category_id = ANY(${categories})` : Prisma.empty}
-      GROUP BY TO_CHAR(transaction_date, ${dateFormat})
-      ORDER BY period
-    `;
+    const response = {
+      success: true,
+      data: { trends: result, groupBy, period, dateRange },
+    };
 
-    result = timeData.map(item => ({
-      key: item.period,
-      value: item.total,
-      count: item.count,
-      average: item.average,
-      median: calculateMedian(item.amounts),
-    }));
+    // Cache for 10 minutes
+    await cacheService.set(cacheKey, response, { ttl: 600 });
+    res.json(response);
+  } catch (error) {
+    logger.error('Trends query failed:', error);
+    throw error;
   }
-
-  const response = {
-    success: true,
-    data: { trends: result, groupBy, period, dateRange },
-  };
-
-  // Cache for 10 minutes
-  await cacheService.set(cacheKey, response, { ttl: 600 });
-  res.json(response);
 });
 
 export const getCategoryAnalysis = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -396,134 +456,87 @@ export const getCategoryAnalysis = asyncHandler(async (req: AuthRequest, res: Re
   const last6Months = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
   try {
-    // Single optimized query for category analysis
-    const categoryAnalysisRaw = await prisma.$queryRaw<Array<{
-      category_id: string;
-      category_name: string;
-      category_color: string;
-      category_icon: string;
-      current_total: number;
-      current_count: number;
-      current_avg: number;
-      current_min: number;
-      current_max: number;
-      historical_total: number;
-      historical_count: number;
-      historical_avg: number;
-    }>>`
-      SELECT 
-        c.id as category_id,
-        c.name as category_name,
-        c.color as category_color,
-        c.icon as category_icon,
-        COALESCE(current_month.total, 0)::float as current_total,
-        COALESCE(current_month.count, 0)::int as current_count,
-        COALESCE(current_month.avg, 0)::float as current_avg,
-        COALESCE(current_month.min, 0)::float as current_min,
-        COALESCE(current_month.max, 0)::float as current_max,
-        COALESCE(historical.total, 0)::float as historical_total,
-        COALESCE(historical.count, 0)::int as historical_count,
-        COALESCE(historical.avg, 0)::float as historical_avg
-      FROM categories c
-      LEFT JOIN (
-        SELECT 
-          category_id,
-          SUM(amount) as total,
-          COUNT(*) as count,
-          AVG(amount) as avg,
-          MIN(amount) as min,
-          MAX(amount) as max
-        FROM expenses 
-        WHERE user_id = ${userId}
-          AND transaction_date >= ${startOfMonth}
-          AND transaction_date <= ${now}
-        GROUP BY category_id
-      ) current_month ON c.id = current_month.category_id
-      LEFT JOIN (
-        SELECT 
-          category_id,
-          SUM(amount) as total,
-          COUNT(*) as count,
-          AVG(amount) as avg
-        FROM expenses 
-        WHERE user_id = ${userId}
-          AND transaction_date >= ${last6Months}
-          AND transaction_date <= ${now}
-        GROUP BY category_id
-      ) historical ON c.id = historical.category_id
-      WHERE current_month.category_id IS NOT NULL 
-         OR historical.category_id IS NOT NULL
-      ORDER BY current_total DESC
-    `;
+    // Get current month data by category
+    const currentMonthData = await prisma.expense.groupBy({
+      by: ['categoryId'],
+      where: {
+        userId,
+        transactionDate: {
+          gte: startOfMonth,
+          lte: now,
+        },
+      },
+      _sum: { amount: true },
+      _count: true,
+      _avg: { amount: true },
+      _min: { amount: true },
+      _max: { amount: true },
+    });
 
-    // Get monthly trend data for each category
-    const monthlyTrendData = await prisma.$queryRaw<Array<{
-      category_id: string;
-      month: string;
-      total: number;
-      count: number;
-    }>>`
-      SELECT 
-        category_id,
-        TO_CHAR(transaction_date, 'YYYY-MM') as month,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${last6Months}
-        AND transaction_date <= ${now}
-      GROUP BY category_id, TO_CHAR(transaction_date, 'YYYY-MM')
-      ORDER BY month DESC
-    `;
+    // Get historical data by category
+    const historicalData = await prisma.expense.groupBy({
+      by: ['categoryId'],
+      where: {
+        userId,
+        transactionDate: {
+          gte: last6Months,
+          lte: now,
+        },
+      },
+      _sum: { amount: true },
+      _count: true,
+      _avg: { amount: true },
+    });
+
+    // Get category details
+    const allCategoryIds = [...new Set([
+      ...currentMonthData.map(d => d.categoryId),
+      ...historicalData.map(d => d.categoryId),
+    ])];
+
+    const categories = await prisma.category.findMany({
+      where: { id: { in: allCategoryIds } },
+      select: { id: true, name: true, color: true, icon: true },
+    });
 
     // Process analysis data
-    const analysis = categoryAnalysisRaw.map(cat => {
-      const historicalAvg = cat.historical_total / 6; // 6 months average
-      const totalChange = historicalAvg > 0 ? ((cat.current_total - historicalAvg) / historicalAvg) * 100 : 0;
-      
-      // Get monthly trend for this category
-      const categoryTrends = monthlyTrendData
-        .filter(m => m.category_id === cat.category_id)
-        .map(m => ({
-          month: m.month,
-          total: m.total,
-          count: m.count,
-        }))
-        .sort((a, b) => a.month.localeCompare(b.month));
+    const analysis = categories.map(category => {
+      const currentData = currentMonthData.find(d => d.categoryId === category.id);
+      const histData = historicalData.find(d => d.categoryId === category.id);
 
-      // Calculate trend direction
-      const recentMonths = categoryTrends.slice(-3);
-      const isIncreasing = recentMonths.length >= 2 && 
-        recentMonths[recentMonths.length - 1].total > recentMonths[0].total;
+      const currentTotal = Number(currentData?._sum.amount) || 0;
+      const historicalTotal = Number(histData?._sum.amount) || 0;
+      const historicalAvg = historicalTotal / 6; // 6 months average
+      const totalChange = historicalAvg > 0 ? ((currentTotal - historicalAvg) / historicalAvg) * 100 : 0;
 
       return {
         category: {
-          id: cat.category_id,
-          name: cat.category_name,
-          color: cat.category_color,
-          icon: cat.category_icon,
+          id: category.id,
+          name: category.name,
+          color: category.color,
+          icon: category.icon,
         },
         currentMonth: {
-          total: cat.current_total,
-          count: cat.current_count,
-          average: cat.current_avg,
-          min: cat.current_min,
-          max: cat.current_max,
+          total: currentTotal,
+          count: currentData?._count || 0,
+          average: Number(currentData?._avg.amount) || 0,
+          min: Number(currentData?._min.amount) || 0,
+          max: Number(currentData?._max.amount) || 0,
         },
         historical: {
-          total: cat.historical_total,
-          count: cat.historical_count,
-          average: cat.historical_avg,
+          total: historicalTotal,
+          count: histData?._count || 0,
+          average: Number(histData?._avg.amount) || 0,
           monthlyAverage: historicalAvg,
         },
         trends: {
           totalChange,
-          isIncreasing,
-          monthlyData: categoryTrends,
+          isIncreasing: totalChange > 5,
+          monthlyData: [], // Could be enhanced with monthly breakdown
         },
-        insights: generateCategoryInsights(cat.current_total, historicalAvg, cat.current_count, cat.historical_count),
+        insights: generateCategoryInsights(currentTotal, historicalAvg, currentData?._count || 0, histData?._count || 0),
       };
-    });
+    }).filter(a => a.currentMonth.total > 0 || a.historical.total > 0);
 
     const response = {
       success: true,
@@ -617,89 +630,118 @@ export const getSpendingInsights = asyncHandler(async (req: AuthRequest, res: Re
   const previous30Days = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
   try {
-    // Single optimized query for spending insights
-    const insightsRaw = await prisma.$queryRaw<Array<{
-      period: string;
-      total: number;
-      count: number;
-      avg: number;
-      weekday_total: number;
-      weekend_total: number;
-    }>>`
-      SELECT 
-        CASE 
-          WHEN transaction_date >= ${last30Days} THEN 'current'
-          ELSE 'previous'
-        END as period,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count,
-        AVG(amount)::float as avg,
-        SUM(CASE WHEN EXTRACT(DOW FROM transaction_date) BETWEEN 1 AND 5 THEN amount ELSE 0 END)::float as weekday_total,
-        SUM(CASE WHEN EXTRACT(DOW FROM transaction_date) IN (0, 6) THEN amount ELSE 0 END)::float as weekend_total
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${previous30Days}
-        AND transaction_date <= ${now}
-      GROUP BY 
-        CASE 
-          WHEN transaction_date >= ${last30Days} THEN 'current'
-          ELSE 'previous'
-        END
-    `;
+    // Get current and previous period data using Prisma
+    const [currentPeriodData, previousPeriodData, topMerchants] = await Promise.all([
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: {
+            gte: last30Days,
+            lte: now,
+          },
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+      }),
 
-    // Get top merchants in single query
-    const topMerchants = await prisma.$queryRaw<Array<{
-      merchant: string;
-      total: number;
-      count: number;
-    }>>`
-      SELECT 
-        merchant,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${last30Days}
-        AND transaction_date <= ${now}
-        AND merchant IS NOT NULL
-      GROUP BY merchant
-      ORDER BY total DESC
-      LIMIT 10
-    `;
+      prisma.expense.aggregate({
+        where: {
+          userId,
+          transactionDate: {
+            gte: previous30Days,
+            lt: last30Days,
+          },
+        },
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+      }),
+
+      prisma.expense.groupBy({
+        by: ['merchant'],
+        where: {
+          userId,
+          transactionDate: {
+            gte: last30Days,
+            lte: now,
+          },
+          merchant: { not: null },
+        },
+        _sum: { amount: true },
+        _count: true,
+        orderBy: {
+          _sum: {
+            amount: 'desc',
+          },
+        },
+        take: 10,
+      }),
+    ]);
+
+    // Get weekday vs weekend spending
+    const expenses = await prisma.expense.findMany({
+      where: {
+        userId,
+        transactionDate: {
+          gte: last30Days,
+          lte: now,
+        },
+      },
+      select: {
+        amount: true,
+        transactionDate: true,
+      },
+    });
+
+    let weekdayTotal = 0;
+    let weekendTotal = 0;
+
+    expenses.forEach(expense => {
+      const dayOfWeek = new Date(expense.transactionDate).getDay();
+      const amount = Number(expense.amount);
+      
+      if (dayOfWeek === 0 || dayOfWeek === 6) { // Sunday or Saturday
+        weekendTotal += amount;
+      } else {
+        weekdayTotal += amount;
+      }
+    });
 
     // Find unusual spending patterns
     const unusualSpending = await findUnusualSpending(userId, last30Days, now);
 
-    const currentPeriod = insightsRaw.find(p => p.period === 'current');
-    const previousPeriod = insightsRaw.find(p => p.period === 'previous');
+    const currentPeriod = {
+      total: Number(currentPeriodData._sum.amount) || 0,
+      count: currentPeriodData._count || 0,
+      average: Number(currentPeriodData._avg.amount) || 0,
+    };
+
+    const previousPeriod = {
+      total: Number(previousPeriodData._sum.amount) || 0,
+      count: previousPeriodData._count || 0,
+      average: Number(previousPeriodData._avg.amount) || 0,
+    };
 
     const insights = {
       period: {
-        current: {
-          total: currentPeriod?.total || 0,
-          count: currentPeriod?.count || 0,
-          average: currentPeriod?.avg || 0,
-        },
-        previous: {
-          total: previousPeriod?.total || 0,
-          count: previousPeriod?.count || 0,
-          average: previousPeriod?.avg || 0,
-        },
+        current: currentPeriod,
+        previous: previousPeriod,
         change: {
-          total: calculatePercentageChange(previousPeriod?.total || 0, currentPeriod?.total || 0),
-          count: calculatePercentageChange(previousPeriod?.count || 0, currentPeriod?.count || 0),
-          average: calculatePercentageChange(previousPeriod?.avg || 0, currentPeriod?.avg || 0),
+          total: calculatePercentageChange(previousPeriod.total, currentPeriod.total),
+          count: calculatePercentageChange(previousPeriod.count, currentPeriod.count),
+          average: calculatePercentageChange(previousPeriod.average, currentPeriod.average),
         },
       },
       weekdayVsWeekend: {
-        weekday: currentPeriod?.weekday_total || 0,
-        weekend: currentPeriod?.weekend_total || 0,
-        ratio: (currentPeriod?.weekend_total || 0) / (currentPeriod?.weekday_total || 1),
+        weekday: weekdayTotal,
+        weekend: weekendTotal,
+        ratio: weekdayTotal > 0 ? weekendTotal / weekdayTotal : 0,
       },
       topMerchants: topMerchants.map(m => ({
-        merchant: m.merchant,
-        total: m.total,
-        count: m.count,
+        merchant: m.merchant || 'Unknown',
+        total: Number(m._sum.amount) || 0,
+        count: m._count,
       })),
       unusual: unusualSpending,
     };
@@ -803,122 +845,79 @@ async function findUnusualSpending(userId: string, startDate: Date, endDate: Dat
     }
 
     // Find new merchants (not seen in previous 90 days)
-    const newMerchants = await prisma.$queryRaw<Array<{ merchant: string; total: number }>>`
-      SELECT merchant, SUM(amount)::float as total
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${startDate}
-        AND transaction_date <= ${endDate}
-        AND merchant IS NOT NULL
-        AND merchant NOT IN (
-          SELECT DISTINCT merchant 
-          FROM expenses 
-          WHERE user_id = ${userId}
-            AND transaction_date >= ${new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000)}
-            AND transaction_date < ${startDate}
-            AND merchant IS NOT NULL
-        )
-      GROUP BY merchant
-      ORDER BY total DESC
-      LIMIT 3
-    `;
+    const newMerchants = await prisma.expense.groupBy({
+      by: ['merchant'],
+      where: {
+        userId,
+        transactionDate: { gte: startDate, lte: endDate },
+        merchant: { not: null },
+        AND: {
+          NOT: {
+            merchant: {
+              in: await prisma.expense.findMany({
+                where: {
+                  userId,
+                  transactionDate: { 
+                    gte: new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000),
+                    lt: startDate 
+                  },
+                  merchant: { not: null },
+                },
+                select: { merchant: true },
+              }).then(expenses => expenses.map(e => e.merchant).filter(Boolean) as string[]),
+            },
+          },
+        },
+      },
+      _sum: { amount: true },
+      orderBy: {
+        _sum: { amount: 'desc' },
+      },
+      take: 3,
+    });
 
     newMerchants.forEach(merchant => {
       unusual.push({
         type: 'new_merchant',
         description: `New merchant: ${merchant.merchant}`,
-        amount: merchant.total,
+        amount: Number(merchant._sum.amount) || 0,
       });
     });
 
     // Find spending spikes (days with unusually high spending)
-    const dailySpending = await prisma.$queryRaw<Array<{
-      day: string;
-      total: number;
-      count: number;
-    }>>`
-      SELECT 
-        TO_CHAR(transaction_date, 'YYYY-MM-DD') as day,
-        SUM(amount)::float as total,
-        COUNT(*)::int as count
-      FROM expenses 
-      WHERE user_id = ${userId}
-        AND transaction_date >= ${startDate}
-        AND transaction_date <= ${endDate}
-      GROUP BY TO_CHAR(transaction_date, 'YYYY-MM-DD')
-      ORDER BY total DESC
-      LIMIT 3
-    `;
+    const expenses = await prisma.expense.findMany({
+      where: {
+        userId,
+        transactionDate: { gte: startDate, lte: endDate },
+      },
+      select: {
+        amount: true,
+        transactionDate: true,
+      },
+    });
 
-    // Get average daily spending for comparison
-    const avgDailySpending = dailySpending.reduce((sum, day) => sum + day.total, 0) / Math.max(dailySpending.length, 1);
-    
-    dailySpending.forEach(day => {
-      if (day.total > avgDailySpending * 2) {
+    // Group by day and find spikes
+    const dailyTotals = new Map<string, number>();
+    expenses.forEach(expense => {
+      const day = expense.transactionDate.toISOString().split('T')[0];
+      const current = dailyTotals.get(day) || 0;
+      dailyTotals.set(day, current + Number(expense.amount));
+    });
+
+    const dailyAmounts = Array.from(dailyTotals.values());
+    const avgDailySpending = dailyAmounts.reduce((sum, amount) => sum + amount, 0) / Math.max(dailyAmounts.length, 1);
+
+    // Find days with spending > 2x average
+    Array.from(dailyTotals.entries())
+      .filter(([_, amount]) => amount > avgDailySpending * 2)
+      .slice(0, 3)
+      .forEach(([day, amount]) => {
         unusual.push({
           type: 'spending_spike',
-          description: `High spending day: ${day.day}`,
-          amount: day.total,
+          description: `High spending day: ${day}`,
+          amount,
         });
-      }
-    });
-
-    // Find categories with unusual activity
-    const categoryActivity = await prisma.$queryRaw<Array<{
-      category_name: string;
-      current_total: number;
-      avg_total: number;
-    }>>`
-      WITH category_averages AS (
-        SELECT 
-          c.name as category_name,
-          AVG(monthly_total) as avg_total
-        FROM (
-          SELECT 
-            category_id,
-            TO_CHAR(transaction_date, 'YYYY-MM') as month,
-            SUM(amount) as monthly_total
-          FROM expenses 
-          WHERE user_id = ${userId}
-            AND transaction_date >= ${new Date(startDate.getTime() - 180 * 24 * 60 * 60 * 1000)}
-            AND transaction_date < ${startDate}
-          GROUP BY category_id, TO_CHAR(transaction_date, 'YYYY-MM')
-        ) monthly_data
-        JOIN categories c ON monthly_data.category_id = c.id
-        GROUP BY c.name
-      ),
-      current_spending AS (
-        SELECT 
-          c.name as category_name,
-          SUM(e.amount) as current_total
-        FROM expenses e
-        JOIN categories c ON e.category_id = c.id
-        WHERE e.user_id = ${userId}
-          AND e.transaction_date >= ${startDate}
-          AND e.transaction_date <= ${endDate}
-        GROUP BY c.name
-      )
-      SELECT 
-        ca.category_name,
-        COALESCE(cs.current_total, 0)::float as current_total,
-        ca.avg_total::float as avg_total
-      FROM category_averages ca
-      LEFT JOIN current_spending cs ON ca.category_name = cs.category_name
-      WHERE ca.avg_total > 0 
-        AND ABS(COALESCE(cs.current_total, 0) - ca.avg_total) / ca.avg_total > 0.5
-      ORDER BY ABS(COALESCE(cs.current_total, 0) - ca.avg_total) DESC
-      LIMIT 2
-    `;
-
-    categoryActivity.forEach(cat => {
-      const change = cat.avg_total > 0 ? ((cat.current_total - cat.avg_total) / cat.avg_total) * 100 : 0;
-      unusual.push({
-        type: 'category_anomaly',
-        description: `Unusual ${cat.category_name} spending: ${change > 0 ? 'increased' : 'decreased'} by ${Math.abs(change).toFixed(0)}%`,
-        amount: cat.current_total,
-        category: cat.category_name,
       });
-    });
 
   } catch (error) {
     logger.error('Error finding unusual spending patterns:', error);

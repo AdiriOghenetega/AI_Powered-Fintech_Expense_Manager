@@ -202,6 +202,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ budget, onClose, onSucce
               Cancel
             </Button>
             <Button
+            variant='gradient'
               type="submit"
               loading={isSubmitting}
               className="flex-1"
