@@ -12,7 +12,21 @@ import {
   useCategorizeExpense 
 } from '@/hooks/useExpenses';
 import type { Expense } from '@/types/expense';
+import type { ApiResponse, PaginatedResponse } from '@/types/api';
 import type { ExpenseFilters as ExpenseFiltersType } from '@/services/expenseService';
+
+// Define the expected response structure
+interface ExpensesListData {
+  expenses: Expense[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    limit: number;
+  };
+}
 
 export const ExpenseList: React.FC = () => {
   const [filters, setFilters] = useState<ExpenseFiltersType>({
@@ -22,19 +36,59 @@ export const ExpenseList: React.FC = () => {
     sortOrder: 'desc',
   });
   
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState<boolean>(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   
   // Add state for search input value (separate from filters)
-  const [searchInput, setSearchInput] = useState('');
+  const [searchInput, setSearchInput] = useState<string>('');
   
   // Add ref for debounce timeout
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { data: expensesData, isLoading, error } = useExpenses(filters);
+  const { data: expensesResponse, isLoading, error } = useExpenses(filters);
   const deleteExpense = useDeleteExpense();
   const categorizeExpense = useCategorizeExpense();
+
+  // Type guard to check if response has 'data' property
+  const hasDataProperty = (response: any): response is ApiResponse<ExpensesListData> => {
+    return response && typeof response === 'object' && 'data' in response && response.data;
+  };
+
+  // Type guard to check if response has paginated structure
+  const isPaginatedResponse = (response: any): response is PaginatedResponse<Expense> => {
+    return response && typeof response === 'object' && 'items' in response && 'pagination' in response;
+  };
+
+  // Type guard to check if response is direct expenses data
+  const isExpensesListData = (response: any): response is ExpensesListData => {
+    return response && typeof response === 'object' && 'expenses' in response && Array.isArray(response.expenses);
+  };
+
+  // Extract expenses data using type guards
+  const expensesData: ExpensesListData | null = React.useMemo(() => {
+    if (!expensesResponse) return null;
+
+    // Handle ApiResponse<ExpensesListData> format
+    if (hasDataProperty(expensesResponse)) {
+      return expensesResponse.data || null;
+    }
+
+    // Handle PaginatedResponse format
+    if (isPaginatedResponse(expensesResponse)) {
+      return {
+        expenses: expensesResponse.items,
+        pagination: expensesResponse.pagination
+      };
+    }
+
+    // Handle direct ExpensesListData format
+    if (isExpensesListData(expensesResponse)) {
+      return expensesResponse;
+    }
+
+    return null;
+  }, [expensesResponse]);
 
   // Listen for floating action button events
   useEffect(() => {
@@ -67,12 +121,12 @@ export const ExpenseList: React.FC = () => {
     };
   }, [searchInput]);
 
-  const handleEdit = (expense: Expense) => {
+  const handleEdit = (expense: Expense): void => {
     setEditingExpense(expense);
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string): Promise<void> => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
         await deleteExpense.mutateAsync(id);
@@ -82,7 +136,7 @@ export const ExpenseList: React.FC = () => {
     }
   };
 
-  const handleCategorize = async (id: string) => {
+  const handleCategorize = async (id: string): Promise<void> => {
     try {
       await categorizeExpense.mutateAsync(id);
     } catch (error) {
@@ -90,16 +144,16 @@ export const ExpenseList: React.FC = () => {
     }
   };
 
-  const handleCloseForm = () => {
+  const handleCloseForm = (): void => {
     setShowForm(false);
     setEditingExpense(null);
   };
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = (newPage: number): void => {
     setFilters({ ...filters, page: newPage });
   };
 
-  const clearFilters = () => {
+  const clearFilters = (): void => {
     setFilters({
       page: 1,
       limit: 20,
@@ -111,11 +165,11 @@ export const ExpenseList: React.FC = () => {
   };
 
   // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setSearchInput(e.target.value);
   };
 
-  const handleFilterToggle = () => {
+  const handleFilterToggle = (): void => {
     setSearchInput("")
     setShowFilters(!showFilters)
   }
@@ -139,7 +193,7 @@ export const ExpenseList: React.FC = () => {
           
           {/* Content Skeleton */}
           <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
+            {[...Array(5)].map((_, i: number) => (
               <Card key={i} className="stagger-item">
                 <div className="h-32 skeleton rounded-xl"></div>
               </Card>
@@ -167,8 +221,8 @@ export const ExpenseList: React.FC = () => {
     );
   }
 
-  const expenses = expensesData?.data?.expenses || [];
-  const pagination = expensesData?.data?.pagination;
+  const expenses: Expense[] = expensesData?.expenses || [];
+  const pagination = expensesData?.pagination;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -233,7 +287,7 @@ export const ExpenseList: React.FC = () => {
                 {pagination && pagination.totalCount > 0 && (
                   <div className="text-center">
                     <p className="text-2xl font-bold text-green-600">
-                      ₦{expenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
+                      ₦{expenses.reduce((sum: number, exp: Expense) => sum + exp.amount, 0).toFixed(2)}
                     </p>
                     <p className="text-sm text-gray-600">Current Page Total</p>
                   </div>
@@ -291,7 +345,7 @@ export const ExpenseList: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {expenses.map((expense, index) => (
+            {expenses.map((expense: Expense, index: number) => (
               <div 
                 key={expense.id} 
                 className="stagger-item"
@@ -340,7 +394,7 @@ export const ExpenseList: React.FC = () => {
                   
                   {/* Page numbers */}
                   <div className="hidden sm:flex items-center space-x-1">
-                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i: number) => {
                       const page = Math.max(1, pagination.currentPage - 2) + i;
                       if (page > pagination.totalPages) return null;
                       

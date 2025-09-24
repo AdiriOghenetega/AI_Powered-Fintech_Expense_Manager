@@ -3,10 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { 
   TrendingUp, 
   PieChart as PieChartIcon, 
-  BarChart3, 
-  Calendar,
   Filter,
-  Download,
   RefreshCw
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -24,8 +21,7 @@ import {
   CartesianGrid, 
   Tooltip,
   BarChart,
-  Bar,
-  Legend
+  Bar
 } from 'recharts';
 import { analyticsService } from '@/services/analyticsService';
 import { useCategories } from '@/hooks/useExpenses';

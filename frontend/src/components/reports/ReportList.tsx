@@ -16,10 +16,25 @@ import {
   useDownloadReport,
   useGenerateReport,
 } from "@/hooks/useReports";
+import type { Report } from "@/types/report";
+import type { ApiResponse, PaginatedResponse } from "@/types/api";
 import type { ReportFilters } from "@/services/reportService";
 
 interface ReportListProps {
   onGenerateNew: () => void;
+}
+
+// Define the expected response structure
+interface ReportsListData {
+  reports: Report[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+    limit: number;
+  };
 }
 
 export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
@@ -30,14 +45,55 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(
     null
   );
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
-  const { data: reportsData, isLoading, error } = useReports(filters);
+  const { data: reportsResponse, isLoading, error } = useReports(filters);
   const deleteReport = useDeleteReport();
   const downloadReport = useDownloadReport();
   const generateReport = useGenerateReport();
 
-  const handleDelete = async (id: string) => {
+  // Type guard to check if response has 'data' property
+  const hasDataProperty = (response: any): response is ApiResponse<ReportsListData> => {
+    return response && typeof response === 'object' && 'data' in response && response.data;
+  };
+
+  // Type guard to check if response has paginated structure
+  const isPaginatedResponse = (response: any): response is PaginatedResponse<Report> => {
+    return response && typeof response === 'object' && 'items' in response && 'pagination' in response;
+  };
+
+  // Type guard to check if response is direct reports data
+  const isReportsListData = (response: any): response is ReportsListData => {
+    return response && typeof response === 'object' && 'reports' in response && Array.isArray(response.reports);
+  };
+
+  // Extract reports data using type guards
+  const reportsData: ReportsListData | null = React.useMemo(() => {
+    if (!reportsResponse) return null;
+
+    // Handle ApiResponse<ReportsListData> format
+    if (hasDataProperty(reportsResponse)) {
+      return reportsResponse.data || null;
+    }
+
+    // Handle PaginatedResponse format
+    if (isPaginatedResponse(reportsResponse)) {
+      return {
+        reports: reportsResponse.items,
+        pagination: reportsResponse.pagination
+      };
+    }
+
+    // Handle direct ReportsListData format
+    if (isReportsListData(reportsResponse)) {
+      return reportsResponse;
+    }
+
+    // Ensure we always return null instead of undefined
+    return null;
+  }, [reportsResponse]);
+
+  const handleDelete = async (id: string): Promise<void> => {
     try {
       await deleteReport.mutateAsync(id);
     } catch (error) {
@@ -48,7 +104,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
   const handleDownload = async (
     id: string,
     format: "pdf" | "csv" | "excel" = "pdf"
-  ) => {
+  ): Promise<void> => {
     try {
       setDownloadingReportId(id);
       await downloadReport.mutateAsync({ id, format });
@@ -59,7 +115,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
     }
   };
 
-  const handleRegenerate = async (id: string) => {
+  const handleRegenerate = async (id: string): Promise<void> => {
     try {
       await generateReport.mutateAsync(id);
     } catch (error) {
@@ -67,7 +123,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
     }
   };
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = (newPage: number): void => {
     setFilters({ ...filters, page: newPage });
   };
 
@@ -83,7 +139,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
           
           {/* Content Skeleton */}
           <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
+            {[...Array(3)].map((_, i: number) => (
               <Card key={i}>
                 <div className="h-24 skeleton rounded-xl"></div>
               </Card>
@@ -111,8 +167,8 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
     );
   }
 
-  const reports = reportsData?.data?.reports || [];
-  const pagination = reportsData?.data?.pagination;
+  const reports: Report[] = reportsData?.reports || [];
+  const pagination = reportsData?.pagination;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -169,7 +225,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                     onChange={(e) =>
                       setFilters({
                         ...filters,
-                        type: (e.target.value as any) || undefined,
+                        type: (e.target.value as ReportFilters['type']) || undefined,
                         page: 1,
                       })
                     }
@@ -217,7 +273,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
           </div>
         ) : (
           <div className="space-y-4">
-            {reports.map((report, index) => (
+            {reports.map((report: Report, index: number) => (
               <div 
                 key={report.id}
                 className="stagger-item"
@@ -269,7 +325,7 @@ export const ReportList: React.FC<ReportListProps> = ({ onGenerateNew }) => {
                   
                   {/* Page numbers - simplified for mobile */}
                   <div className="hidden sm:flex items-center space-x-1">
-                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
+                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i: number) => {
                       const page = Math.max(1, pagination.currentPage - 2) + i;
                       if (page > pagination.totalPages) return null;
                       

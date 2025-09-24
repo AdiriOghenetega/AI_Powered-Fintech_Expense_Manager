@@ -5,7 +5,34 @@ import { Card } from '@/components/ui/Card';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useNavigate } from 'react-router-dom';
 
-const formatCurrency = (amount: number) => {
+// Define TypeScript interfaces for our data structures
+interface Category {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  transactionDate: string;
+  category: Category;
+}
+
+interface ExpensesData {
+  expenses: Expense[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+// Type for the API response - handling both possible formats
+interface ExpensesApiResponse {
+  data: ExpensesData;
+}
+
+const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -14,11 +41,36 @@ const formatCurrency = (amount: number) => {
 
 export const ExpenseSummary: React.FC = () => {
   const navigate = useNavigate();
-  const { data: expensesData, isLoading } = useExpenses({
+  const { data: expensesResponse, isLoading } = useExpenses({
     limit: 5,
     sortBy: 'date',
     sortOrder: 'desc',
   });
+
+  // Type guard to check if response has 'data' property
+  const hasDataProperty = (response: any): response is ExpensesApiResponse => {
+    return response && typeof response === 'object' && 'data' in response && response.data;
+  };
+
+  // Type guard to check if response is direct expenses data
+  const isExpensesData = (response: any): response is ExpensesData => {
+    return response && typeof response === 'object' && 'expenses' in response && Array.isArray(response.expenses);
+  };
+
+  // Extract expenses data using type guards
+  const expensesData: ExpensesData | null = React.useMemo(() => {
+    if (!expensesResponse) return null;
+
+    if (hasDataProperty(expensesResponse)) {
+      return expensesResponse.data;
+    }
+
+    if (isExpensesData(expensesResponse)) {
+      return expensesResponse;
+    }
+
+    return null;
+  }, [expensesResponse]);
 
   if (isLoading) {
     return (
@@ -26,7 +78,7 @@ export const ExpenseSummary: React.FC = () => {
         <div className="animate-pulse space-y-4">
           <div className="h-4 bg-gray-200 rounded w-1/4"></div>
           <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
+            {[...Array(3)].map((_, i: number) => (
               <div key={i} className="h-3 bg-gray-200 rounded"></div>
             ))}
           </div>
@@ -35,8 +87,8 @@ export const ExpenseSummary: React.FC = () => {
     );
   }
 
-  const expenses = expensesData?.data?.expenses || [];
-  const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const expenses: Expense[] = expensesData?.expenses || [];
+  const totalAmount: number = expenses.reduce((sum: number, exp: Expense) => sum + exp.amount, 0);
 
   return (
     <Card>
@@ -53,7 +105,6 @@ export const ExpenseSummary: React.FC = () => {
 
       {expenses.length === 0 ? (
         <div className="text-center py-6">
-          <div className="text-4xl mb-2">í²³</div>
           <p className="text-gray-600 mb-4">No expenses yet</p>
           <Button size="sm" onClick={() => navigate('/expenses')}>
             <Plus className="h-4 w-4 mr-2" />
@@ -73,7 +124,7 @@ export const ExpenseSummary: React.FC = () => {
           </div>
 
           {/* Recent transactions */}
-          {expenses.map((expense) => (
+          {expenses.map((expense: Expense) => (
             <div key={expense.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center">
                 <div 

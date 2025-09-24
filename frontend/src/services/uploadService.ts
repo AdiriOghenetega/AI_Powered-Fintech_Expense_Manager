@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import type { ApiResponse } from '@/types/api';
 
 export interface UploadedReceipt {
   url: string;
@@ -17,7 +18,7 @@ export interface UploadReceiptResponse {
 }
 
 export const uploadService = {
-  async uploadReceipt(file: File): Promise<UploadReceiptResponse> {
+  async uploadReceipt(file: File): Promise<ApiResponse<UploadedReceipt>> {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
@@ -33,10 +34,10 @@ export const uploadService = {
     const formData = new FormData();
     formData.append('receipt', file);
     
-    return await apiRequest<UploadReceiptResponse>('POST', '/upload/receipt', formData);
+    return await apiRequest<UploadedReceipt>('POST', '/upload/receipt', formData);
   },
 
-  async deleteReceipt(publicId: string): Promise<{ success: boolean; message?: string }> {
+  async deleteReceipt(publicId: string): Promise<ApiResponse<{ success: boolean; message?: string }>> {
     return await apiRequest<{ success: boolean; message?: string }>(
       'DELETE', 
       `/upload/receipt/${encodeURIComponent(publicId)}`

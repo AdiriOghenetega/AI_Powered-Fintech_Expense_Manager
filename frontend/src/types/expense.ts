@@ -20,6 +20,7 @@ export interface Expense {
   aiConfidence?: number;
   createdAt: string;
   updatedAt: string;
+  receiptUrl?: string;
 }
 
 export interface CreateExpenseData {

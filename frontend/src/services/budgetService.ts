@@ -1,6 +1,5 @@
 import { apiRequest } from './api';
 import type { Budget, CreateBudgetData, BudgetAlert, BudgetStats } from '@/types/budget';
-import type { PaginatedResponse } from '@/types/api';
 
 export interface BudgetFilters {
   period?: 'MONTHLY' | 'QUARTERLY' | 'YEARLY';

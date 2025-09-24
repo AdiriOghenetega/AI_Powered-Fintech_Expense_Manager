@@ -1,5 +1,5 @@
 import { apiRequest } from './api';
-import type { DashboardOverview, TrendsData, CategoryAnalysis, BudgetPerformance, SpendingInsights } from '@/types/analytics';
+import type { TrendsData, CategoryAnalysis, BudgetPerformance, SpendingInsights } from '@/types/analytics';
 
 export const analyticsService = {
   async getOverview() {

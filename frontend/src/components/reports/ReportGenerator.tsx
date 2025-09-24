@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { 
@@ -15,19 +15,31 @@ import { useCategories } from '@/hooks/useExpenses';
 import { useCreateReport } from '@/hooks/useReports';
 import type { CreateReportRequest } from '@/types/report';
 
+// Create a more flexible schema that matches react-hook-form expectations
 const reportSchema = z.object({
   name: z.string().min(1, 'Report name is required').max(100, 'Name too long'),
   type: z.enum(['monthly', 'quarterly', 'yearly', 'custom']),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
-  categories: z.array(z.string()).optional(),
-  includeCharts: z.boolean().default(true),
-  groupBy: z.enum(['day', 'week', 'month', 'category']).default('month'),
-  isScheduled: z.boolean().default(false),
+  categories: z.array(z.string()),
+  includeCharts: z.boolean(),
+  groupBy: z.enum(['day', 'week', 'month', 'category']),
+  isScheduled: z.boolean(),
   scheduleFrequency: z.enum(['weekly', 'monthly', 'quarterly']).optional(),
 });
 
-type ReportFormData = z.infer<typeof reportSchema>;
+// Create a form-specific type that's more flexible
+interface ReportFormData extends FieldValues {
+  name: string;
+  type: 'monthly' | 'quarterly' | 'yearly' | 'custom';
+  startDate: string;
+  endDate: string;
+  categories: string[];
+  includeCharts: boolean;
+  groupBy: 'day' | 'week' | 'month' | 'category';
+  isScheduled: boolean;
+  scheduleFrequency?: 'weekly' | 'monthly' | 'quarterly';
+}
 
 interface ReportGeneratorProps {
   onClose: () => void;
@@ -35,18 +47,13 @@ interface ReportGeneratorProps {
 }
 
 export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuccess }) => {
-  const [isAdvanced, setIsAdvanced] = useState(false);
+  const [isAdvanced, setIsAdvanced] = useState<boolean>(false);
   const { data: categoriesData } = useCategories();
   const createReport = useCreateReport();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    watch,
-    setValue,
-  } = useForm<ReportFormData>({
-    resolver: zodResolver(reportSchema),
+  const form = useForm<ReportFormData>({
+    resolver: zodResolver(reportSchema) as any, // Type assertion to bypass resolver issue
+    mode: 'onChange',
     defaultValues: {
       name: '',
       type: 'monthly',
@@ -59,10 +66,12 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
     },
   });
 
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = form;
+
   const watchedType = watch('type');
   const watchedScheduled = watch('isScheduled');
 
-  const onSubmit = async (data: ReportFormData) => {
+  const onSubmit = async (data: ReportFormData): Promise<void> => {
     try {
       const reportRequest: CreateReportRequest = {
         name: data.name,
@@ -75,8 +84,8 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
           groupBy: data.groupBy,
         },
         isScheduled: data.isScheduled,
-        scheduleConfig: data.isScheduled ? {
-          frequency: data.scheduleFrequency!,
+        scheduleConfig: data.isScheduled && data.scheduleFrequency ? {
+          frequency: data.scheduleFrequency,
         } : undefined,
       };
 
@@ -89,8 +98,8 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
   };
 
   // Auto-set date ranges based on report type
-  const handleTypeChange = (type: string) => {
-    setValue('type', type as any);
+  const handleTypeChange = (type: ReportFormData['type']): void => {
+    setValue('type', type);
     const now = new Date();
     
     switch (type) {
@@ -133,7 +142,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
             {...register('name')}
             label="Report Name"
             icon={<FileText />}
-            error={errors.name?.message}
+            error={errors.name?.message as string}
             placeholder="Monthly Expense Report - January 2024"
           />
 
@@ -142,10 +151,10 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
             <label className="block text-sm font-medium text-gray-700 mb-3">Report Type</label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { value: 'monthly', label: 'Monthly'},
-                { value: 'quarterly', label: 'Quarterly'},
-                { value: 'yearly', label: 'Yearly'},
-                { value: 'custom', label: 'Custom'},
+                { value: 'monthly' as const, label: 'Monthly'},
+                { value: 'quarterly' as const, label: 'Quarterly'},
+                { value: 'yearly' as const, label: 'Yearly'},
+                { value: 'custom' as const, label: 'Custom'},
               ].map((type) => (
                 <button
                   key={type.value}
@@ -170,14 +179,14 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
               type="date"
               label="Start Date"
               icon={<Calendar />}
-              error={errors.startDate?.message}
+              error={errors.startDate?.message as string}
             />
             <Input
               {...register('endDate')}
               type="date"
               label="End Date"
               icon={<Calendar />}
-              error={errors.endDate?.message}
+              error={errors.endDate?.message as string}
             />
           </div>
 
@@ -217,7 +226,7 @@ export const ReportGenerator: React.FC<ReportGeneratorProps> = ({ onClose, onSuc
                   Categories (optional)
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-32 overflow-y-auto">
-                  {categoriesData?.data?.categories.map((category) => (
+                  {categoriesData?.data?.categories?.map((category: any) => (
                     <label key={category.id} className="flex items-center">
                       <input
                         type="checkbox"

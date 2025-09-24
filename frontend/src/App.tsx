@@ -22,8 +22,7 @@ import {
   LogOut, 
   User,
   Menu,
-  X,
-  Plus
+  X
 } from 'lucide-react';
 
 const queryClient = new QueryClient({

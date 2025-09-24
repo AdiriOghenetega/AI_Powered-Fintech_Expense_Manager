@@ -7,15 +7,12 @@ import {
   Target,
   AlertTriangle,
   Plus,
-  ArrowUpRight,
-  ArrowDownRight,
-  Eye,
-  Zap,
-  DollarSign
+  Eye
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SummaryCard } from './SummaryCard';
 import { 
   PieChart, 
   Pie, 
@@ -27,12 +24,98 @@ import { analyticsService } from '@/services/analyticsService';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'];
 
+// Define interfaces for type safety
+interface OverviewData {
+  currentMonth: {
+    total: number;
+    count: number;
+    average: number;
+  };
+  trends: {
+    totalChange: number;
+    countChange: number;
+    avgChange: number;
+    velocityChange: number;
+  };
+  velocity?: {
+    recent7Days: number;
+  };
+}
+
+interface CategoryBreakdown {
+  categoryId: string;
+  categoryName: string;
+  categoryColor?: string;
+  total: number;
+}
+
+interface Category {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  transactionDate: string;
+  merchant?: string;
+  category: Category;
+}
+
+interface Budget {
+  id: string;
+  amount: number;
+  spent: number;
+  percentage: number;
+  remaining: number;
+  category: Category;
+}
+
+interface DashboardData {
+  overview: OverviewData;
+  categoryBreakdown: CategoryBreakdown[];
+  recentTransactions: Transaction[];
+  budgetStatus: Budget[];
+}
+
 export const Dashboard: React.FC = () => {
-  const { data: overviewData, isLoading, error } = useQuery({
+  const { data: apiResponse, isLoading, error } = useQuery({
     queryKey: ['dashboard-overview'],
     queryFn: () => analyticsService.getOverview(),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
+
+  // Handle both possible response formats with better type safety
+  const dashboardData: DashboardData | null = React.useMemo(() => {
+    if (!apiResponse) return null;
+    
+    // Type guard to check if apiResponse has the expected structure
+    const hasDataProperty = (obj: any): obj is { data: DashboardData } => {
+      return obj && typeof obj === 'object' && 'data' in obj && obj.data;
+    };
+    
+    const isDashboardData = (obj: any): obj is DashboardData => {
+      return obj && typeof obj === 'object' && 
+             'overview' in obj && 
+             'categoryBreakdown' in obj && 
+             'recentTransactions' in obj && 
+             'budgetStatus' in obj;
+    };
+    
+    // Check if response has a 'data' property (wrapped response)
+    if (hasDataProperty(apiResponse)) {
+      return apiResponse.data;
+    }
+    
+    // Otherwise, check if the response is the data itself
+    if (isDashboardData(apiResponse)) {
+      return apiResponse;
+    }
+    
+    return null;
+  }, [apiResponse]);
 
   if (isLoading) {
     return (
@@ -63,7 +146,7 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (error || !overviewData?.data) {
+  if (error || !dashboardData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
         <div className="text-center scale-in">
@@ -80,7 +163,14 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  const { overview, categoryBreakdown, recentTransactions, budgetStatus } = overviewData.data;
+  const { overview, categoryBreakdown, recentTransactions, budgetStatus } = dashboardData;
+
+  // Transform category breakdown data for the pie chart
+  const chartData = categoryBreakdown.slice(0, 6).map((item) => ({
+    name: item.categoryName,
+    value: item.total,
+    color: item.categoryColor || '#3B82F6'
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -102,7 +192,7 @@ export const Dashboard: React.FC = () => {
               title="This Month"
               amount={overview.currentMonth.total}
               change={overview.trends.totalChange}
-              showIcon = {false}
+              showIcon={false}
               trend="spending"
             />
           </div>
@@ -158,27 +248,28 @@ export const Dashboard: React.FC = () => {
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={categoryBreakdown.slice(0, 6)}
+                          data={chartData}
                           cx="50%"
                           cy="50%"
                           outerRadius={80}
-                          dataKey="total"
-                          nameKey="categoryName"
+                          dataKey="value"
+                          nameKey="name"
                           animationBegin={200}
                           animationDuration={800}
                         >
-                          {categoryBreakdown.slice(0, 6).map((entry, index) => (
+                          {chartData.map((entry, index) => (
                             <Cell 
                               key={`cell-${index}`} 
-                              fill={entry.categoryColor || COLORS[index]}
+                              fill={entry.color || COLORS[index]}
                               className="hover:opacity-80 transition-opacity duration-300"
                             />
                           ))}
                         </Pie>
                         <Tooltip 
                           formatter={(value: number) => [`₦${value.toFixed(2)}`, 'Amount']}
+                          labelFormatter={(label: string) => label}
                           contentStyle={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            backgroundColor: 'rgba(255, 255, 255, 0.5)',
                             backdropFilter: 'blur(10px)',
                             border: 'none',
                             borderRadius: '12px',
@@ -375,79 +466,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-// Enhanced Summary Card Component
-interface SummaryCardProps {
-  title: string;
-  amount: number;
-  change?: number;
-  icon?: React.ReactNode;
-  color?: 'blue' | 'green' | 'purple' | 'orange';
-  isCount?: boolean;
-  trend?: 'spending' | 'income' | 'neutral';
-  showIcon?: boolean;
-}
-
-const SummaryCard: React.FC<SummaryCardProps> = ({ 
-  title, 
-  amount, 
-  change, 
-  icon, 
-  color, 
-  isCount = false,
-  trend = 'neutral',
-  showIcon = true
-}) => {
-  const colorClasses = {
-    blue: 'from-blue-500 to-blue-600',
-    green: 'from-green-500 to-emerald-600',
-    purple: 'from-purple-500 to-violet-600',
-    orange: 'from-orange-500 to-amber-600',
-  };
-
-  const getChangeColor = () => {
-    if (change === undefined) return 'text-gray-500';
-    if (trend === 'spending') {
-      return change >= 0 ? 'text-red-600' : 'text-green-600';
-    }
-    return change >= 0 ? 'text-green-600' : 'text-red-600';
-  };
-
-  const ChangeIcon = change === undefined ? null : 
-    (trend === 'spending' ? 
-      (change >= 0 ? ArrowUpRight : ArrowDownRight) :
-      (change >= 0 ? ArrowUpRight : ArrowDownRight)
-    );
-
-  return (
-    <Card className="hover-lift relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br opacity-5 rounded-full -mr-16 -mt-16" 
-           style={{ background: `linear-gradient(135deg, var(--tw-gradient-stops))` }} />
-      
-      <div className="relative flex items-center space-x-4">
-        {showIcon && <div className={`p-3 rounded-xl bg-gradient-to-br ${colorClasses[color]} shadow-lg`}>
-          <div className="text-white">
-            {icon}
-          </div>
-        </div>}
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">
-            {isCount ? amount.toLocaleString() : `₦${amount.toFixed(2)}`}
-          </p>
-          {change !== undefined && (
-            <div className={`flex items-center text-sm mt-2 ${getChangeColor()}`}>
-              {ChangeIcon && <ChangeIcon className="h-4 w-4 mr-1" />}
-              <span className="font-semibold">
-                {change >= 0 ? '+' : ''}{Math.abs(change).toFixed(1)}% vs last month
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
   );
 };
 

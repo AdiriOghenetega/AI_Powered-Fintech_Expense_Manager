@@ -1,19 +1,14 @@
 import { apiRequest } from './api';
-import type { User, LoginCredentials, RegisterData } from '@/types/auth';
+import type { 
+  User, 
+  LoginCredentials, 
+  RegisterData, 
+  TokenValidationResult 
+} from '@/types/auth';
 
 interface PasswordResetResponse {
   success: boolean;
   message: string;
-}
-
-interface TokenValidationResponse {
-  success: boolean;
-  message: string;
-  data?: {
-    valid: boolean;
-    expired?: boolean;
-    used?: boolean;
-  };
 }
 
 export const authService = {
@@ -43,7 +38,7 @@ export const authService = {
     return await apiRequest<{ user: User }>('GET', '/auth/me');
   },
 
-  logout() {
+  logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   },
@@ -60,7 +55,8 @@ export const authService = {
   isAuthenticated(): boolean {
     return !!this.getStoredToken();
   },
-    async requestPasswordReset(email: string): Promise<PasswordResetResponse> {
+
+  async requestPasswordReset(email: string): Promise<PasswordResetResponse> {
     try {
       const response = await apiRequest<PasswordResetResponse>('POST', '/auth/forgot-password', {
         email: email.toLowerCase(),
@@ -78,13 +74,13 @@ export const authService = {
     }
   },
 
-  async validateResetToken(token: string): Promise<{ 
-    valid: boolean; 
-    expired?: boolean; 
-    used?: boolean; 
-  }> {
+  async validateResetToken(token: string): Promise<TokenValidationResult> {
     try {
-      const response = await apiRequest<TokenValidationResponse>(
+      const response = await apiRequest<{
+        valid: boolean;
+        expired?: boolean;
+        used?: boolean;
+      }>(
         'GET', 
         `/auth/validate-reset-token/${encodeURIComponent(token)}`
       );
