@@ -426,7 +426,7 @@ export const Dashboard: React.FC = () => {
                           className="text-lg"
                           style={{ color: transaction.category.color }}
                         >
-                          {getCategoryIcon(transaction.category.icon)}
+                          {getCategoryIcon()}
                         </span>
                       </div>
                       <div>
@@ -470,22 +470,8 @@ export const Dashboard: React.FC = () => {
 };
 
 // Utility functions
-function getCategoryIcon(iconName: string): string {
-  const iconMap: Record<string, string> = {
-    utensils: '🍽️',
-    car: '🚗',
-    'shopping-bag': '🛍️',
-    film: '🎬',
-    receipt: '📄',
-    heart: '❤️',
-    plane: '✈️',
-    book: '📚',
-    user: '👤',
-    home: '🏠',
-    briefcase: '💼',
-    'more-horizontal': '⋯',
-  };
-  return iconMap[iconName] || '📁';
+function getCategoryIcon(){
+  return '📁';
 }
 
 function formatDate(dateString: string): string {
