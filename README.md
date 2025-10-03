@@ -1,4 +1,4 @@
-# 📊 AI-Powered Fintech Expense Management Dashboard
+# AI-Powered Fintech Expense Management Dashboard
 
 <div align="center">
 
@@ -17,11 +17,11 @@
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This is a senior-level full-stack fintech application that demonstrates modern web development practices with enterprise-grade architecture. Built with TypeScript, React, Node.js, and PostgreSQL, it features AI-powered expense categorization, real-time analytics, and comprehensive financial management tools.
 
-### 🏗️ Architecture Highlights
+### Architecture Highlights
 
 - **Microservices-Ready**: Clean separation between frontend, backend, and database
 - **AI Integration**: OpenAI GPT-4 for intelligent expense categorization
@@ -31,16 +31,16 @@ This is a senior-level full-stack fintech application that demonstrates modern w
 
 ---
 
-## ✨ Features
+## Features
 
-### 🔐 **Authentication & Security**
+### **Authentication & Security**
 - Secure JWT-based authentication with refresh tokens
 - Password hashing with bcrypt (12 rounds)
 - Rate limiting and request validation
 - Protected routes and role-based access
 - CORS and security headers (Helmet.js)
 
-### 💳 **Expense Management**
+### **Expense Management**
 - Full CRUD operations for expenses
 - Advanced filtering and search capabilities
 - Bulk import/export functionality
@@ -48,20 +48,20 @@ This is a senior-level full-stack fintech application that demonstrates modern w
 - Recurring expense tracking
 - Multi-category tagging system
 
-### 🤖 **AI-Powered Features**
+### **AI-Powered Features**
 - **Smart Categorization**: OpenAI GPT-4 integration for automatic expense categorization
 - **Confidence Scoring**: AI predictions with accuracy metrics
 - **Learning System**: Improves accuracy based on user corrections
 - **Fallback Rules**: Rule-based categorization when AI is unavailable
 
-### 📊 **Analytics & Reporting**
+### **Analytics & Reporting**
 - **Real-time Dashboard**: Interactive charts and KPIs
 - **Spending Trends**: Time-series analysis with multiple grouping options
 - **Category Insights**: Detailed breakdown of spending patterns
 - **Budget Tracking**: Visual progress indicators and alerts
 - **Custom Reports**: Exportable financial reports (PDF, CSV, Excel)
 
-### 📱 **User Experience**
+### **User Experience**
 - **Responsive Design**: Mobile-first approach with Tailwind CSS
 - **Dark/Light Themes**: User preference-based theming
 - **Offline Support**: Progressive Web App capabilities
@@ -70,7 +70,7 @@ This is a senior-level full-stack fintech application that demonstrates modern w
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### **Frontend**
 ```
@@ -109,7 +109,7 @@ Docker + Docker Compose
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Node.js** 18+ and npm
@@ -168,7 +168,7 @@ npm run dev
 
 ---
 
-## ⚙️ Environment Setup
+## Environment Setup
 
 ### Required Environment Variables
 
@@ -209,7 +209,7 @@ SENTRY_DSN=your-sentry-dsn
 
 ---
 
-## 📖 API Documentation
+## API Documentation
 
 ### Authentication Endpoints
 
@@ -305,7 +305,7 @@ CREATE INDEX idx_expenses_merchant ON expenses(merchant);
 
 ---
 
-## 🎨 Frontend Architecture
+## Frontend Architecture
 
 ### Component Structure
 
@@ -346,7 +346,7 @@ await createExpense.mutateAsync(expenseData);
 
 ---
 
-## 🤖 AI Integration Details
+## AI Integration Details
 
 ### OpenAI Configuration
 
@@ -381,7 +381,7 @@ Return: {"category": "Food & Dining", "confidence": 0.95}
 
 ---
 
-## 📊 Analytics Features
+## Analytics Features
 
 ### Dashboard Metrics
 
@@ -410,7 +410,7 @@ const { data } = useQuery({
 
 ---
 
-## 🔒 Security Features
+## Security Features
 
 ### Authentication Security
 
@@ -439,7 +439,7 @@ app.use(validateInput); // Input validation
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Backend Testing
 
@@ -476,7 +476,7 @@ npm run test:visual
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Docker Production
 
@@ -517,7 +517,7 @@ curl http://localhost:3001/health
 
 ---
 
-## 📈 Performance Optimizations
+## Performance Optimizations
 
 ### Database Optimizations
 
@@ -540,7 +540,7 @@ curl http://localhost:3001/health
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 ### Development Workflow
 
@@ -567,7 +567,7 @@ curl http://localhost:3001/health
 
 ---
 
-## 📚 Learning Resources
+## Learning Resources
 
 ### Architecture Decisions
 
@@ -583,7 +583,7 @@ curl http://localhost:3001/health
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -631,7 +631,7 @@ echo $VITE_API_URL
 
 ---
 
-## 📊 Demo
+## Demo
 
 ### Demo Credentials
 
@@ -650,13 +650,13 @@ The application comes with pre-seeded data including:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **OpenAI** for AI categorization capabilities
 - **Prisma** team for excellent ORM
@@ -666,14 +666,14 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ---
 
-## 📞 Support
+## Support
 
 ### Getting Help
 
-- 📖 **Documentation**: Check the docs folder for detailed guides
-- 🐛 **Bug Reports**: Open an issue with reproduction steps
-- 💡 **Feature Requests**: Suggest improvements via issues
-- 💬 **Discussions**: Join our community discussions
+-  **Documentation**: Check the docs folder for detailed guides
+-  **Bug Reports**: Open an issue with reproduction steps
+-  **Feature Requests**: Suggest improvements via issues
+-  **Discussions**: Join our community discussions
 
 ### Contact
 
