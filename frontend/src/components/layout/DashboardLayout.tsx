@@ -8,7 +8,6 @@ import {
   BarChart3,
   FileText,
   LogOut,
-  User,
   Menu,
   X,
 } from "lucide-react";
