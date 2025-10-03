@@ -84,7 +84,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </div>
               </Link>
 
-              {/* Desktop Navigation */}
+              {/* Desktop Nav */}
               <div className="hidden lg:ml-10 lg:flex lg:space-x-2">
                 {navigation.map((item) => {
                   const IconComponent = item.icon;
@@ -148,7 +148,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
         </div>
 
-        {/* Mobile Navigation Menu */}
+        {/* Mobile Nav Menu */}
         {isMobileMenuOpen && (
           <div className="lg:hidden border-t border-white/20 bg-white/80 backdrop-blur-md">
             <div className="px-4 py-6 space-y-3">
